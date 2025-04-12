@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyExcelColumns } from "@/app/lib/process-excel/verify-excel";
 import { runPythonScript } from "@/app/lib/process-excel/run-python-script";
-import { checkExcelSecurity } from "@/app/lib/utils/file-security";
+import { performFullSecurityCheck } from "@/app/lib/security/file-security";
 import { ErrorCode, getErrorMessage } from "@/app/lib/errors/error-codes";
 import {
   createErrorResponse,
@@ -56,8 +56,8 @@ export async function POST(
       );
     }
 
-    // Verificar seguridad del archivo
-    const securityResult = await checkExcelSecurity(file);
+    // Verificación de seguridad mejorada
+    const securityResult = await performFullSecurityCheck(file);
     if (!securityResult.isSecure) {
       return NextResponse.json(
         createErrorResponse(
