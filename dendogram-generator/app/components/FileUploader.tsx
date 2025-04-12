@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { z } from "zod";
 import { fileSchema } from "../lib/validations/file-schema";
@@ -33,6 +33,14 @@ export default function FileUploader() {
   > | null>(null);
   const [processingResult, setProcessingResult] =
     useState<ProcessingResult | null>(null);
+  const [isVercelEnvironment, setIsVercelEnvironment] = useState(false);
+
+  // Detectar si estamos en Vercel
+  useEffect(() => {
+    // Verificar la URL para saber si estamos en Vercel o localhost
+    const isVercel = window.location.hostname.includes("vercel.app");
+    setIsVercelEnvironment(isVercel);
+  }, []);
 
   // Función para mostrar mensajes de error
   const showErrorToast = (code: ErrorCode, message: string) => {
@@ -237,6 +245,32 @@ export default function FileUploader() {
   return (
     <div className="w-full max-w-4xl mx-auto">
       <Toaster position="top-center" />
+
+      {/* Aviso de limitación en Vercel */}
+      {isVercelEnvironment && (
+        <Alert variant="warning" className="mb-6">
+          <div className="flex items-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 mr-2"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <strong>Limitación del entorno:</strong>
+          </div>
+          <p className="mt-1">
+            En la versión desplegada, el procesamiento Python no está disponible
+            debido a limitaciones del entorno serverless. Para utilizar todas
+            las funcionalidades, ejecuta la aplicación localmente.
+          </p>
+        </Alert>
+      )}
 
       {/* Área para arrastrar archivos */}
       <div

@@ -38,106 +38,16 @@ export async function runPythonScript(
     const isVercel = process.env.VERCEL === "1";
 
     if (isVercel) {
-      // En Vercel, enviamos el archivo al endpoint de Python
-      try {
-        // Convertir el archivo a base64 para enviarlo como JSON
-        const fileBase64 = file.toString("base64");
+      // En Vercel, notificamos que esta funcionalidad no está disponible directamente
+      console.log(
+        "Ejecutando en entorno Vercel - El procesamiento Python no está disponible directamente"
+      );
 
-        console.log("Enviando archivo para procesamiento serverless Python...");
-
-        // Hacer una solicitud al endpoint de Python con mayor timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutos de timeout
-
-        const response = await fetch("/api/python/process-excel", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            fileBase64,
-            filename: "data.xlsx",
-          }),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        console.log(
-          "Respuesta del servidor Python:",
-          response.status,
-          response.statusText
-        );
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          try {
-            // Intentar parsear como JSON
-            const errorJson = JSON.parse(errorText);
-            console.error("Error detallado del servidor Python:", errorJson);
-            return {
-              error: errorJson.error || "Error en el procesamiento serverless",
-              details: errorJson.details || errorText,
-            };
-          } catch {
-            // Si no es JSON, usar el texto tal cual
-            console.error("Respuesta de error del servidor Python:", errorText);
-            return {
-              error: "Error en el procesamiento serverless",
-              details: errorText,
-            };
-          }
-        }
-
-        const result = await response.json();
-        console.log("Procesamiento Python completado");
-
-        if (result.error) {
-          console.error(
-            "Error reportado por el servidor Python:",
-            result.error
-          );
-          return {
-            error: result.error,
-            details: result.details || "No hay detalles disponibles",
-          };
-        }
-
-        // Verificar que las imágenes se hayan generado correctamente
-        if (!result.matriz_escalera || !result.dendrograma) {
-          console.error("Faltan imágenes en la respuesta del servidor Python");
-          return {
-            error: "Imágenes faltantes en la respuesta",
-            details: "El servidor no devolvió todas las imágenes requeridas",
-          };
-        }
-
-        return {
-          matriz_escalera: result.matriz_escalera,
-          dendrograma: result.dendrograma,
-        };
-      } catch (error) {
-        console.error("Error al procesar en Vercel:", error);
-        // Detectar si es un error de timeout
-        const isTimeout =
-          error instanceof Error &&
-          (error.name === "AbortError" ||
-            error.message.includes("timeout") ||
-            error.message.includes("aborted"));
-
-        if (isTimeout) {
-          return {
-            error: "El procesamiento tomó demasiado tiempo",
-            details:
-              "El servidor no respondió dentro del tiempo límite. Intente con un archivo más pequeño o contacte al administrador.",
-          };
-        }
-
-        return {
-          error: "Error al procesar en entorno serverless",
-          details: error instanceof Error ? error.message : String(error),
-        };
-      }
+      return {
+        error: "El procesamiento Python no se puede ejecutar en este entorno",
+        details:
+          "Esta funcionalidad no está disponible en el entorno de producción. Por favor, use la aplicación localmente o implemente un servicio externo para el procesamiento de Python.",
+      };
     } else {
       // Enfoque local: ejecutar el script Python directamente
       // Obtener la ruta del script Python (relativa al directorio del proyecto)

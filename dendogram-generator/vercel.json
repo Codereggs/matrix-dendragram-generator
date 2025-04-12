@@ -1,14 +1,6 @@
 {
   "framework": "nextjs",
-  "functions": {
-    "app/api/python/process-excel/index.py": {
-      "runtime": "python3.9",
-      "memory": 4096,
-      "maxDuration": 600
-    }
-  },
-  "routes": [
-    { "src": "/api/python/(.*)", "dest": "/app/api/python/$1" },
-    { "src": "/(.*)", "dest": "/$1" }
-  ]
+  "buildCommand": "next build",
+  "devCommand": "next dev",
+  "installCommand": "npm install"
 }

@@ -134,6 +134,20 @@ export async function POST(
           );
         }
 
+        // Si el error es que no se puede ejecutar Python en Vercel, mostrar un mensaje específico
+        if (result.error.includes("no se puede ejecutar en este entorno")) {
+          return NextResponse.json(
+            createErrorResponse(
+              ErrorCode.ENVIRONMENT_ERROR,
+              "Esta función no está disponible en el entorno de producción. Por favor, use la aplicación localmente para el procesamiento completo.",
+              {
+                details: "El procesamiento Python no está disponible en Vercel",
+              }
+            ),
+            { status: 500 }
+          );
+        }
+
         return NextResponse.json(
           createErrorResponse(
             ErrorCode.PYTHON_EXECUTION_ERROR,

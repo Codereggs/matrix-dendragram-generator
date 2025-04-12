@@ -14,6 +14,7 @@ export const ErrorCode = {
   // Errores de procesamiento
   PYTHON_EXECUTION_ERROR: "python_execution_error",
   IMAGES_GENERATION_ERROR: "images_generation_error",
+  ENVIRONMENT_ERROR: "environment_error",
 
   // Errores generales
   SERVER_ERROR: "server_error",
@@ -47,6 +48,8 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
     "Error al ejecutar el análisis de datos. El procesamiento Python falló.",
   [ErrorCode.IMAGES_GENERATION_ERROR]:
     "No se pudieron generar las imágenes de análisis.",
+  [ErrorCode.ENVIRONMENT_ERROR]:
+    "Esta funcionalidad no está disponible en el entorno actual. Intenta usar la aplicación localmente.",
 
   // Errores generales
   [ErrorCode.SERVER_ERROR]:
