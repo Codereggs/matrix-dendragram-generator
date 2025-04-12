@@ -3,7 +3,7 @@ import json
 import base64
 import io
 import os
-import pandas as pd
+import polars as pl
 import numpy as np
 import tempfile
 from sklearn.metrics.pairwise import cosine_similarity
@@ -14,7 +14,6 @@ import plotly.figure_factory as ff
 import gc  # Garbage collector
 
 # Configuración global para reducir uso de memoria
-pd.options.mode.chained_assignment = None
 np.set_printoptions(precision=4)  # Reducir precisión para ahorrar memoria
 
 class handler(BaseHTTPRequestHandler):
@@ -52,20 +51,15 @@ class handler(BaseHTTPRequestHandler):
             try:
                 print(f"Procesando archivo Excel: {temp_path}")
                 
-                # Use dtype para optimizar el uso de memoria
-                dtype_dict = {'id': 'category', 'url': 'category', 'description': str}
-                
-                # Use nrows para limitar si es necesario
-                max_rows = 5000
-                df = pd.read_excel(
-                    temp_path, 
+                # Cargar Excel con Polars y openpyxl
+                df = pl.read_excel(
+                    temp_path,
                     sheet_name=0,
-                    usecols=['id', 'url', 'description'],
-                    engine='openpyxl',
-                    dtype=dtype_dict,
-                    nrows=max_rows
+                    read_options={"engine": "openpyxl"},
+                    columns=["id", "url", "description"]
                 )
-                print(f"Datos cargados: {df.shape[0]} filas, {df.shape[1]} columnas")
+                
+                print(f"Datos cargados: {df.height} filas, {df.width} columnas")
                 
                 # Liberar memoria del archivo temporal
                 if os.path.exists(temp_path):
@@ -85,7 +79,7 @@ class handler(BaseHTTPRequestHandler):
                 print("Procesando matriz de similitud...")
                 
                 # Limitar muestra
-                unique_ids = df['id'].unique()
+                unique_ids = df.select("id").unique().to_series().to_list()
                 sample_size = min(100, len(unique_ids))
                 if len(unique_ids) > sample_size:
                     print(f"Reduciendo muestra a {sample_size} elementos para optimizar memoria")
@@ -94,15 +88,16 @@ class handler(BaseHTTPRequestHandler):
                 # Extraer id y urls para enviar al frontend
                 id_url_mapping = {}
                 for item_id in unique_ids:
-                    item_data = df[df['id'] == item_id]
-                    if not item_data.empty:
-                        first_row = item_data.iloc[0]
-                        id_url_mapping[str(first_row['id'])] = first_row['url']
+                    # Filtrar y obtener el primer registro para cada ID
+                    item_data = df.filter(pl.col("id") == item_id)
+                    if item_data.height > 0:
+                        first_row = item_data.row(0)
+                        id_url_mapping[str(first_row[0])] = first_row[1]  # id, url
                 
                 # Extraer descripciones - uso más eficiente de memoria
                 descriptions = []
                 for i, item_id in enumerate(unique_ids):
-                    item_descriptions = df[df['id'] == item_id]['description'].tolist()
+                    item_descriptions = df.filter(pl.col("id") == item_id).select("description").to_series().to_list()
                     descriptions.append(' '.join(item_descriptions))
                     # Liberar memoria cada 20 iteraciones
                     if i % 20 == 0:
