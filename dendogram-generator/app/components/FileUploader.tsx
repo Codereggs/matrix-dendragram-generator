@@ -10,14 +10,32 @@ import { Progress } from "./ui/progress";
 import { Alert } from "./ui/alert";
 import { Toaster, toast } from "react-hot-toast";
 import { ErrorCode, getErrorMessage } from "../lib/errors/error-codes";
-import { ApiErrorResponse, ApiResponse } from "../lib/errors/api-error";
+import { ApiErrorResponse } from "../lib/errors/api-error";
+import dynamic from "next/dynamic";
+
+// Cargar Plotly dinámicamente para evitar errores de SSR
+const DynamicPlot = dynamic(
+  () => import("react-plotly.js").then((mod) => mod.default),
+  { ssr: false }
+);
 
 interface ProcessingResult {
   success: boolean;
   message: string;
-  images?: {
-    matriz_escalera?: string;
-    dendrograma?: string;
+  data?: {
+    heatmap?: {
+      z: number[][];
+      ids: string[];
+    };
+    dendrogram?: {
+      ivl: string[];
+      dcoord: number[][];
+      icoord: number[][];
+      color_list?: string[];
+    };
+    metadata?: {
+      id_url_mapping: Record<string, string>;
+    };
   };
 }
 
@@ -141,25 +159,28 @@ export default function FileUploader() {
         return;
       }
 
-      // Crear FormData para enviar el archivo
-      const formData = new FormData();
-      formData.append("file", file);
+      // Codificar el archivo a base64
+      const fileBase64 = await readFileAsBase64(file);
 
-      // Enviar al endpoint
+      // Enviar al endpoint como JSON
       setProgress(50);
       const response = await fetch("/api/process-excel", {
         method: "POST",
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ fileBase64 }),
       });
 
       setProgress(80);
 
-      const data = (await response.json()) as ApiResponse<{
-        matriz_escalera: string;
-        dendrograma: string;
-      }>;
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`);
+      }
 
-      if (!response.ok || !data.success) {
+      const data = await response.json();
+
+      if (!data.success) {
         // Manejar respuesta de error
         const errorResponse = data as ApiErrorResponse;
         const errorCode = errorResponse.error.code;
@@ -178,10 +199,7 @@ export default function FileUploader() {
       setProcessingResult({
         success: true,
         message: data.message || "Archivo procesado correctamente.",
-        images: {
-          matriz_escalera: data.data.matriz_escalera,
-          dendrograma: data.data.dendrograma,
-        },
+        data: data.data,
       });
       toast.success("¡Archivo procesado con éxito!");
     } catch (err) {
@@ -202,6 +220,24 @@ export default function FileUploader() {
         setTimeout(() => setProgress(0), 3000);
       }
     }
+  };
+
+  // Función para convertir archivo a base64
+  const readFileAsBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          // Remover el prefijo "data:application/..." de la cadena base64
+          const base64String = reader.result.split(",")[1];
+          resolve(base64String);
+        } else {
+          reject(new Error("No se pudo leer el archivo como string"));
+        }
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
   };
 
   // Renderizar detalles adicionales del error si existen
@@ -340,54 +376,127 @@ export default function FileUploader() {
       )}
 
       {/* Resultado del procesamiento */}
-      {processingResult && !error && (
+      {processingResult?.success && !error && (
         <div className="mt-6 space-y-6">
           <Alert variant="success" className="mt-4">
             {processingResult.message}
           </Alert>
 
-          {processingResult.images && (
+          {processingResult.data && (
             <div className="space-y-8">
               <h2 className="text-xl font-semibold text-center">
                 Resultados del Análisis
               </h2>
 
-              {/* Imágenes generadas */}
-              {processingResult.images.matriz_escalera && (
+              {/* Matriz de Similitud */}
+              {processingResult.data.heatmap && (
                 <div className="bg-white p-4 rounded-lg shadow">
                   <h3 className="text-lg font-medium mb-3">
                     Matriz de Similitud (Tipo Escalera)
                   </h3>
-                  <div className="relative w-full h-[400px] sm:h-[500px]">
-                    <img
-                      src={processingResult.images.matriz_escalera}
-                      alt="Matriz de Similitud (Escalera)"
-                      className="w-full object-contain"
-                      style={{ maxHeight: "500px" }}
+                  <div className="w-full h-[500px]">
+                    <DynamicPlot
+                      data={[
+                        {
+                          z: processingResult.data.heatmap.z,
+                          type: "heatmap",
+                          colorscale: "Blues",
+                          showscale: true,
+                        },
+                      ]}
+                      layout={{
+                        title: "Matriz de Similitud",
+                        width: 800,
+                        height: 500,
+                        margin: { l: 50, r: 50, b: 50, t: 50 },
+                        xaxis: { showticklabels: false },
+                        yaxis: { showticklabels: false },
+                      }}
+                      config={{ responsive: true }}
                     />
                   </div>
                 </div>
               )}
 
-              {processingResult.images.dendrograma && (
+              {/* Dendrograma */}
+              {processingResult.data.dendrogram && (
                 <div className="bg-white p-4 rounded-lg shadow">
                   <h3 className="text-lg font-medium mb-3">
                     Dendrograma de Análisis
                   </h3>
-                  <div className="relative w-full h-[400px] sm:h-[500px]">
-                    <img
-                      src={processingResult.images.dendrograma}
-                      alt="Dendrograma"
-                      className="w-full object-contain"
-                      style={{ maxHeight: "500px" }}
+                  <div className="w-full h-[500px]">
+                    <DynamicPlot
+                      data={[
+                        {
+                          type: "scatter",
+                          mode: "lines",
+                          x: processingResult.data.dendrogram.icoord.flat(),
+                          y: processingResult.data.dendrogram.dcoord.flat(),
+                          line: { color: "#636efa", width: 2 },
+                        },
+                      ]}
+                      layout={{
+                        title: "Dendrograma",
+                        width: 800,
+                        height: 500,
+                        margin: { l: 50, r: 50, b: 50, t: 50 },
+                        showlegend: false,
+                        xaxis: { showticklabels: false },
+                        yaxis: { title: "Distancia" },
+                      }}
+                      config={{ responsive: true }}
                     />
+                  </div>
+                </div>
+              )}
+
+              {/* Metadata y enlaces */}
+              {processingResult.data.metadata?.id_url_mapping && (
+                <div className="bg-white p-4 rounded-lg shadow">
+                  <h3 className="text-lg font-medium mb-3">
+                    URLs de los elementos analizados
+                  </h3>
+                  <div className="max-h-[300px] overflow-y-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            ID
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            URL
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {Object.entries(
+                          processingResult.data.metadata.id_url_mapping
+                        ).map(([id, url]) => (
+                          <tr key={id}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {id}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-500">
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {url}
+                              </a>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
 
               <div className="text-center">
                 <p className="text-sm text-gray-600 mt-4">
-                  Puedes guardar las imágenes haciendo clic derecho sobre ellas.
+                  Las visualizaciones son interactivas. Puedes hacer zoom,
+                  desplazarte y descargarlas.
                 </p>
               </div>
             </div>
