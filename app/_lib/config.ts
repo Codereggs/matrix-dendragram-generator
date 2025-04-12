@@ -7,13 +7,12 @@ interface Config {
   };
 }
 
-// URL base del backend de Python - cambiar en producción
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 const config: Config = {
   apiUrl: API_URL,
   endpoints: {
-    generateCharts: `${API_URL}/api/generate-charts`,
+    generateCharts: `${API_URL}/generate-charts`,
   },
 };
 

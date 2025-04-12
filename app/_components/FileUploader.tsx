@@ -3,15 +3,15 @@
 import { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { z } from "zod";
-import { fileSchema } from "../lib/validations/file-schema";
-import { checkExcelSecurity } from "../lib/utils/file-security";
+import { fileSchema } from "../_lib/validations/file-schema";
+import { checkExcelSecurity } from "../_lib/utils/file-security";
 import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
 import { Alert } from "./ui/alert";
 import { Toaster, toast } from "react-hot-toast";
-import { ErrorCode, getErrorMessage } from "../lib/errors/error-codes";
-import { ApiErrorResponse } from "../lib/errors/api-error";
-import config from "../lib/config";
+import { ErrorCode, getErrorMessage } from "../_lib/errors/error-codes";
+import { ApiErrorResponse } from "../_lib/errors/api-error";
+import config from "../_lib/config";
 
 interface ProcessingResult {
   success: boolean;

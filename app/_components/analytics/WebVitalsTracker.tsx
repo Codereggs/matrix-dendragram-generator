@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { initWebVitals } from "@/app/lib/analytics/web-vitals";
+import { initWebVitals } from "@/app/_lib/analytics/web-vitals";
 
 /**
  * Componente para inicializar el seguimiento de Web Vitals
