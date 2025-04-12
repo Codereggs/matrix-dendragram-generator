@@ -3,7 +3,7 @@
   "functions": {
     "api/process-excel.py": {
       "runtime": "python3.12",
-      "memory": 4096,
+      "memory": 1024,
       "maxDuration": 60
     }
   },
