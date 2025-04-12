@@ -11,6 +11,7 @@ import { Alert } from "./ui/alert";
 import { Toaster, toast } from "react-hot-toast";
 import { ErrorCode, getErrorMessage } from "../lib/errors/error-codes";
 import { ApiErrorResponse, ApiResponse } from "../lib/errors/api-error";
+import Image from "next/image";
 
 interface ProcessingResult {
   success: boolean;
@@ -324,7 +325,7 @@ export default function FileUploader() {
                     Matriz de Similitud (Tipo Escalera)
                   </h3>
                   <div className="relative w-full h-[400px] sm:h-[500px]">
-                    <img
+                    <Image
                       src={processingResult.images.matriz_escalera}
                       alt="Matriz de Similitud (Escalera)"
                       className="w-full object-contain"
@@ -340,7 +341,7 @@ export default function FileUploader() {
                     Dendrograma de Análisis
                   </h3>
                   <div className="relative w-full h-[400px] sm:h-[500px]">
-                    <img
+                    <Image
                       src={processingResult.images.dendrograma}
                       alt="Dendrograma"
                       className="w-full object-contain"
