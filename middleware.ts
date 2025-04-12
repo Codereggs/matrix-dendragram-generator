@@ -11,7 +11,7 @@ export async function middleware() {
   // Content-Security-Policy - Proporciona una capa adicional de seguridad
   response.headers.set(
     "Content-Security-Policy",
-    `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-analytics.com https://va.vercel-scripts.com ${process.env.NEXT_PUBLIC_API_URL}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://va.vercel-analytics.com https://va.vercel-scripts.com ${process.env.NEXT_PUBLIC_API_URL};`
+    `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-analytics.com https://va.vercel-scripts.com ${process.env.API_URL}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://va.vercel-analytics.com https://va.vercel-scripts.com ${process.env.API_URL};`
   );
 
   // X-Content-Type-Options - Evita MIME sniffing

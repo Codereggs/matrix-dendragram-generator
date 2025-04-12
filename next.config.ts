@@ -29,11 +29,11 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: `
       default-src 'self';
-      script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-analytics.com https://vercel.com https://${process.env.NEXT_PUBLIC_API_URL};
+      script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-analytics.com https://vercel.com https://${process.env.API_URL};
       style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
       font-src 'self' https://fonts.gstatic.com;
       img-src 'self' data:;
-      connect-src 'self' https://va.vercel-analytics.com https://vercel.com https://${process.env.NEXT_PUBLIC_API_URL};
+      connect-src 'self' https://va.vercel-analytics.com https://vercel.com https://${process.env.API_URL};
       frame-src 'none';
       object-src 'none';
       form-action 'self';
