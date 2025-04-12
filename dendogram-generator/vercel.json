@@ -1,10 +1,15 @@
 {
   "framework": "nextjs",
   "functions": {
-    "api/process-excel.py": {
+    "api/preprocess/index.py": {
       "runtime": "@vercel/python@4.3.0",
-      "memory": 1024,
-      "maxDuration": 60
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/analyze/index.py": {
+      "runtime": "@vercel/python@4.3.0",
+      "memory": 512,
+      "maxDuration": 30
     }
   },
   "buildCommand": "next build",

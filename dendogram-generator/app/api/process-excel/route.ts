@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyExcelColumns } from "@/app/lib/process-excel/verify-excel";
-import { runPythonScript } from "@/app/lib/process-excel/run-python-script";
 import { performFullSecurityCheck } from "@/app/lib/security/file-security";
 import { ErrorCode, getErrorMessage } from "@/app/lib/errors/error-codes";
 import {
@@ -181,38 +180,137 @@ export async function POST(
     }
 
     try {
-      // Ejecutar el script Python con el buffer del archivo
-      const result = await runPythonScript(fileBuffer);
+      // En Vercel, usamos funciones serverless divididas para optimizar el uso de memoria
+      console.log(
+        "Ejecutando en entorno Vercel - Usando funciones serverless divididas"
+      );
 
-      if (result.error) {
-        console.error("Error en el script Python:", result.error);
-        console.error(
-          "Detalles del error:",
-          result.details || "No hay detalles disponibles"
-        );
+      try {
+        // Convertir el archivo a base64 para enviarlo como JSON
+        const fileBase64 = fileBuffer.toString("base64");
 
-        // En modo de prueba, simulamos un resultado exitoso
-        if (testMode) {
-          console.log("Modo de prueba: Generando respuesta simulada");
+        console.log("Iniciando fase 1: Preprocesamiento...");
+
+        // Primera fase: Preprocesamiento
+        const preprocess = await fetch("/api/preprocess", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            fileBase64,
+          }),
+        });
+
+        if (!preprocess.ok) {
+          const errorText = await preprocess.text();
+          console.error("Error en la fase de preprocesamiento:", errorText);
           return NextResponse.json(
-            createSuccessResponse<ProcessResult>(
-              {
-                matriz_escalera: "data:image/png;base64,test",
-                dendrograma: "data:image/png;base64,test",
-              },
-              "Archivo procesado en modo de prueba"
-            )
+            createErrorResponse(
+              ErrorCode.PYTHON_EXECUTION_ERROR,
+              "Error en la fase de preprocesamiento",
+              { details: errorText }
+            ),
+            { status: 500 }
           );
         }
 
-        // Si el error es que no se puede ejecutar Python en Vercel, mostrar un mensaje específico
-        if (result.error.includes("no se puede ejecutar en este entorno")) {
+        // Extraer datos preprocesados
+        const preprocessResult = await preprocess.json();
+
+        if (!preprocessResult.success) {
+          console.error(
+            "Error reportado en la fase de preprocesamiento:",
+            preprocessResult.error
+          );
           return NextResponse.json(
             createErrorResponse(
-              ErrorCode.ENVIRONMENT_ERROR,
-              "Esta función no está disponible en el entorno de producción. Por favor, use la aplicación localmente para el procesamiento completo.",
+              ErrorCode.PYTHON_EXECUTION_ERROR,
+              preprocessResult.error?.message ||
+                "Error en el preprocesamiento de datos",
+              { details: JSON.stringify(preprocessResult.error) }
+            ),
+            { status: 500 }
+          );
+        }
+
+        console.log("Fase 1 completada. Iniciando fase 2: Análisis...");
+
+        // Segunda fase: Análisis
+        const analyze = await fetch("/api/analyze", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            descriptions: preprocessResult.data.descriptions,
+            unique_ids: preprocessResult.data.unique_ids,
+            id_url_mapping: preprocessResult.data.id_url_mapping,
+          }),
+        });
+
+        if (!analyze.ok) {
+          const errorText = await analyze.text();
+          console.error("Error en la fase de análisis:", errorText);
+          return NextResponse.json(
+            createErrorResponse(
+              ErrorCode.PYTHON_EXECUTION_ERROR,
+              "Error en la fase de análisis",
+              { details: errorText }
+            ),
+            { status: 500 }
+          );
+        }
+
+        // Obtener resultado final
+        const analyzeResult = await analyze.json();
+
+        if (!analyzeResult.success) {
+          console.error(
+            "Error reportado en la fase de análisis:",
+            analyzeResult.error
+          );
+          return NextResponse.json(
+            createErrorResponse(
+              ErrorCode.PYTHON_EXECUTION_ERROR,
+              analyzeResult.error?.message || "Error en el análisis de datos",
+              { details: JSON.stringify(analyzeResult.error) }
+            ),
+            { status: 500 }
+          );
+        }
+
+        console.log("Fase 2 completada. Procesamiento exitoso.");
+
+        // Devolver el resultado final
+        return NextResponse.json(
+          createSuccessResponse<ProcessResult>(
+            {
+              heatmap: analyzeResult.data.heatmap,
+              dendrogram: analyzeResult.data.dendrogram,
+              metadata: analyzeResult.data.metadata,
+            },
+            "Archivo procesado correctamente"
+          )
+        );
+      } catch (error) {
+        console.error("Error al procesar con funciones serverless:", error);
+
+        // Verificar si es un error de timeout
+        const isTimeout =
+          error instanceof Error &&
+          (error.name === "AbortError" ||
+            error.message.includes("timeout") ||
+            error.message.includes("aborted"));
+
+        if (isTimeout) {
+          return NextResponse.json(
+            createErrorResponse(
+              ErrorCode.SERVER_ERROR,
+              "El procesamiento tomó demasiado tiempo",
               {
-                details: "El procesamiento Python no está disponible en Vercel",
+                details:
+                  "La función no respondió dentro del tiempo límite. Intente con un archivo más pequeño.",
               }
             ),
             { status: 500 }
@@ -221,85 +319,22 @@ export async function POST(
 
         return NextResponse.json(
           createErrorResponse(
-            ErrorCode.PYTHON_EXECUTION_ERROR,
-            getErrorMessage(ErrorCode.PYTHON_EXECUTION_ERROR),
+            ErrorCode.SERVER_ERROR,
+            "Error al procesar con funciones serverless",
             {
-              details: result.error,
-              fullDetails: result.details,
+              details: error instanceof Error ? error.message : String(error),
             }
           ),
           { status: 500 }
         );
       }
-
-      // Comprobar si estamos en el nuevo modo (datos de visualización) o modo antiguo (imágenes)
-      if (result.heatmap && result.dendrogram) {
-        // Nuevo modo: devolver los datos para visualización en el cliente
-        return NextResponse.json(
-          createSuccessResponse<ProcessResult>(
-            {
-              heatmap: result.heatmap,
-              dendrogram: result.dendrogram,
-              metadata: result.metadata,
-            },
-            "Archivo procesado correctamente"
-          )
-        );
-      } else if (result.matriz_escalera && result.dendrograma) {
-        // Modo antiguo: devolver las imágenes en base64
-        return NextResponse.json(
-          createSuccessResponse<ProcessResult>(
-            {
-              matriz_escalera: result.matriz_escalera,
-              dendrograma: result.dendrograma,
-            },
-            "Archivo procesado correctamente"
-          )
-        );
-      } else {
-        // En modo de prueba, simulamos un resultado exitoso
-        if (testMode) {
-          console.log("Modo de prueba: Generando respuesta simulada");
-          return NextResponse.json(
-            createSuccessResponse<ProcessResult>(
-              {
-                matriz_escalera: "data:image/png;base64,test",
-                dendrograma: "data:image/png;base64,test",
-              },
-              "Archivo procesado en modo de prueba"
-            )
-          );
-        }
-
-        return NextResponse.json(
-          createErrorResponse(
-            ErrorCode.IMAGES_GENERATION_ERROR,
-            getErrorMessage(ErrorCode.IMAGES_GENERATION_ERROR)
-          ),
-          { status: 500 }
-        );
-      }
     } catch (error) {
-      console.error("Error al ejecutar el script Python:", error);
-
-      // En modo de prueba, simulamos un resultado exitoso
-      if (testMode) {
-        console.log("Modo de prueba: Generando respuesta simulada");
-        return NextResponse.json(
-          createSuccessResponse<ProcessResult>(
-            {
-              matriz_escalera: "data:image/png;base64,test",
-              dendrograma: "data:image/png;base64,test",
-            },
-            "Archivo procesado en modo de prueba"
-          )
-        );
-      }
+      console.error("Error procesando archivo Excel:", error);
 
       return NextResponse.json(
         createErrorResponse(
-          ErrorCode.PYTHON_EXECUTION_ERROR,
-          getErrorMessage(ErrorCode.PYTHON_EXECUTION_ERROR),
+          ErrorCode.SERVER_ERROR,
+          getErrorMessage(ErrorCode.SERVER_ERROR),
           { error: error instanceof Error ? error.message : String(error) }
         ),
         { status: 500 }
