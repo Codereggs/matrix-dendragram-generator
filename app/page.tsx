@@ -1,5 +1,6 @@
 import Image from "next/image";
 import FileUploader from "./_components/FileUploader";
+import InstructionsModal from "@/app/components/InstructionsModal";
 
 export default function Home() {
   return (
@@ -40,6 +41,8 @@ export default function Home() {
           </a>
         </div>
       </footer>
+      {/* Modal de instrucciones */}
+      <InstructionsModal />
     </div>
   );
 }
