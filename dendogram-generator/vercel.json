@@ -1,6 +1,14 @@
 {
   "framework": "nextjs",
+  "functions": {
+    "api/process-excel.py": {
+      "runtime": "python3.9",
+      "memory": 4096,
+      "maxDuration": 600
+    }
+  },
   "buildCommand": "next build",
   "devCommand": "next dev",
-  "installCommand": "npm install"
+  "installCommand": "pnpm install",
+  "regions": ["cdg1"]
 }

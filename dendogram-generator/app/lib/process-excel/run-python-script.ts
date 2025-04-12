@@ -38,16 +38,109 @@ export async function runPythonScript(
     const isVercel = process.env.VERCEL === "1";
 
     if (isVercel) {
-      // En Vercel, notificamos que esta funcionalidad no está disponible directamente
+      // En Vercel, usamos la función serverless de Python
       console.log(
-        "Ejecutando en entorno Vercel - El procesamiento Python no está disponible directamente"
+        "Ejecutando en entorno Vercel - Usando función serverless Python"
       );
 
-      return {
-        error: "El procesamiento Python no se puede ejecutar en este entorno",
-        details:
-          "Esta funcionalidad no está disponible en el entorno de producción. Por favor, use la aplicación localmente o implemente un servicio externo para el procesamiento de Python.",
-      };
+      try {
+        // Convertir el archivo a base64 para enviarlo como JSON
+        const fileBase64 = file.toString("base64");
+
+        console.log(
+          "Enviando archivo para procesamiento con función serverless Python..."
+        );
+
+        // Hacer una solicitud a la función serverless de Python con mayor timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutos de timeout
+
+        // URL absoluta a la función serverless
+        const functionUrl = `/api/process-excel`;
+
+        const response = await fetch(functionUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            fileBase64,
+            filename: "data.xlsx",
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        console.log(
+          "Respuesta de la función Python:",
+          response.status,
+          response.statusText
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          try {
+            // Intentar parsear como JSON
+            const errorJson = JSON.parse(errorText);
+            console.error("Error detallado de la función Python:", errorJson);
+            return {
+              error:
+                errorJson.error?.message ||
+                "Error en el procesamiento serverless",
+              details: JSON.stringify(errorJson),
+            };
+          } catch {
+            // Si no es JSON, usar el texto tal cual
+            console.error(
+              "Respuesta de error de la función Python:",
+              errorText
+            );
+            return {
+              error: "Error en el procesamiento serverless",
+              details: errorText,
+            };
+          }
+        }
+
+        const result = await response.json();
+        console.log("Procesamiento con función Python completado");
+
+        if (!result.success) {
+          console.error("Error reportado por la función Python:", result.error);
+          return {
+            error: result.error?.message || "Error desconocido",
+            details: JSON.stringify(result.error),
+          };
+        }
+
+        return {
+          matriz_escalera: result.data.matriz_escalera,
+          dendrograma: result.data.dendrograma,
+        };
+      } catch (error) {
+        console.error("Error al procesar con función Python:", error);
+
+        // Detectar si es un error de timeout
+        const isTimeout =
+          error instanceof Error &&
+          (error.name === "AbortError" ||
+            error.message.includes("timeout") ||
+            error.message.includes("aborted"));
+
+        if (isTimeout) {
+          return {
+            error: "El procesamiento tomó demasiado tiempo",
+            details:
+              "La función no respondió dentro del tiempo límite. Intente con un archivo más pequeño.",
+          };
+        }
+
+        return {
+          error: "Error al procesar con función serverless",
+          details: error instanceof Error ? error.message : String(error),
+        };
+      }
     } else {
       // Enfoque local: ejecutar el script Python directamente
       // Obtener la ruta del script Python (relativa al directorio del proyecto)
