@@ -9,6 +9,8 @@ import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
 import { Alert } from "./ui/alert";
 import { Toaster, toast } from "react-hot-toast";
+import { ErrorCode, getErrorMessage } from "../lib/errors/error-codes";
+import { ApiErrorResponse, ApiResponse } from "../lib/errors/api-error";
 
 interface ProcessingResult {
   success: boolean;
@@ -25,13 +27,28 @@ export default function FileUploader() {
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<ErrorCode | null>(null);
+  const [errorDetails, setErrorDetails] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
   const [processingResult, setProcessingResult] =
     useState<ProcessingResult | null>(null);
+
+  // Función para mostrar mensajes de error
+  const showErrorToast = (code: ErrorCode, message: string) => {
+    toast.error(message, {
+      id: code, // Usar el código como ID para evitar duplicados
+      duration: 5000, // Duración más larga para errores
+    });
+  };
 
   // Manejar el cambio de archivos
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     // Resetear estados
     setError(null);
+    setErrorCode(null);
+    setErrorDetails(null);
     setProcessingResult(null);
     setProgress(0);
 
@@ -49,9 +66,22 @@ export default function FileUploader() {
       setFile(selectedFile);
     } catch (err) {
       if (err instanceof z.ZodError) {
-        setError(err.errors[0].message);
+        const errorMessage = err.errors[0].message;
+        setError(errorMessage);
+
+        // Determinar el tipo de error para mostrar un toast adecuado
+        if (errorMessage.includes("tamaño")) {
+          showErrorToast(ErrorCode.FILE_SIZE_EXCEEDED, errorMessage);
+        } else if (errorMessage.includes("tipo")) {
+          showErrorToast(ErrorCode.FILE_TYPE_INVALID, errorMessage);
+        } else {
+          showErrorToast(ErrorCode.UNKNOWN_ERROR, errorMessage);
+        }
       } else {
-        setError("Error al cargar el archivo. Por favor intente de nuevo.");
+        const errorMessage =
+          "Error al cargar el archivo. Por favor intente de nuevo.";
+        setError(errorMessage);
+        showErrorToast(ErrorCode.UNKNOWN_ERROR, errorMessage);
       }
       setFile(null);
     }
@@ -72,22 +102,33 @@ export default function FileUploader() {
   // Procesar el archivo
   const handleProcess = async () => {
     if (!file) {
-      setError("Por favor seleccione un archivo para procesar.");
+      const errorMessage = getErrorMessage(ErrorCode.FILE_NOT_PROVIDED);
+      setError(errorMessage);
+      setErrorCode(ErrorCode.FILE_NOT_PROVIDED);
+      showErrorToast(ErrorCode.FILE_NOT_PROVIDED, errorMessage);
       return;
     }
 
     try {
       setIsLoading(true);
       setProgress(10);
+      setError(null);
+      setErrorCode(null);
+      setErrorDetails(null);
 
       // Verificar seguridad del archivo localmente antes de enviarlo
       const securityResult = await checkExcelSecurity(file);
       setProgress(30);
 
       if (!securityResult.isSecure) {
+        const code = ErrorCode.FILE_INSECURE;
+        const errorMessage = getErrorMessage(code);
         setError(
-          securityResult.reason || "El archivo no es seguro para ser procesado."
+          errorMessage +
+            (securityResult.reason ? ` - ${securityResult.reason}` : "")
         );
+        setErrorCode(code);
+        showErrorToast(code, errorMessage);
         setIsLoading(false);
         setProgress(0);
         return;
@@ -106,27 +147,49 @@ export default function FileUploader() {
 
       setProgress(80);
 
-      const data = await response.json();
+      const data = (await response.json()) as ApiResponse<{
+        matriz_completa: string;
+        matriz_escalera: string;
+        dendrograma: string;
+      }>;
 
-      if (!response.ok) {
-        throw new Error(data.error || "Error al procesar el archivo");
+      if (!response.ok || !data.success) {
+        // Manejar respuesta de error
+        const errorResponse = data as ApiErrorResponse;
+        const errorCode = errorResponse.error.code;
+        const errorMessage = errorResponse.error.message;
+        const errorDetails = errorResponse.error.details;
+
+        setError(errorMessage);
+        setErrorCode(errorCode);
+        setErrorDetails(errorDetails || null);
+
+        showErrorToast(errorCode, errorMessage);
+        throw new Error(errorMessage);
       }
 
       setProgress(100);
       setProcessingResult({
         success: true,
-        message: "Archivo procesado correctamente.",
-        images: data.images,
+        message: data.message || "Archivo procesado correctamente.",
+        images: {
+          matriz_completa: data.data.matriz_completa,
+          matriz_escalera: data.data.matriz_escalera,
+          dendrograma: data.data.dendrograma,
+        },
       });
       toast.success("¡Archivo procesado con éxito!");
     } catch (err) {
       console.error("Error al procesar el archivo:", err);
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Ocurrió un error al procesar el archivo. Por favor intente de nuevo."
-      );
-      toast.error("Error al procesar el archivo");
+
+      // Si no se ha establecido un error específico, mostrar error genérico
+      if (!errorCode) {
+        const genericErrorCode = ErrorCode.UNKNOWN_ERROR;
+        const genericErrorMessage = getErrorMessage(genericErrorCode);
+        setError(genericErrorMessage);
+        setErrorCode(genericErrorCode);
+        showErrorToast(genericErrorCode, genericErrorMessage);
+      }
     } finally {
       setIsLoading(false);
       // Resetear la barra de progreso después de un tiempo si hubo error
@@ -134,6 +197,44 @@ export default function FileUploader() {
         setTimeout(() => setProgress(0), 3000);
       }
     }
+  };
+
+  // Renderizar detalles adicionales del error si existen
+  const renderErrorDetails = () => {
+    if (!errorDetails) return null;
+
+    if (
+      errorCode === ErrorCode.MISSING_COLUMNS &&
+      errorDetails.missingColumns
+    ) {
+      const columns = errorDetails.missingColumns as string[];
+      return (
+        <div className="mt-2 text-sm">
+          <p className="font-semibold">Columnas faltantes:</p>
+          <ul className="list-disc list-inside">
+            {columns.map((col) => (
+              <li key={col}>{col}</li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+
+    if (errorCode === ErrorCode.EMPTY_COLUMNS && errorDetails.emptyColumns) {
+      const columns = errorDetails.emptyColumns as string[];
+      return (
+        <div className="mt-2 text-sm">
+          <p className="font-semibold">Columnas sin datos:</p>
+          <ul className="list-disc list-inside">
+            {columns.map((col) => (
+              <li key={col}>{col}</li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -202,6 +303,7 @@ export default function FileUploader() {
       {error && (
         <Alert variant="error" className="mt-4">
           {error}
+          {renderErrorDetails()}
         </Alert>
       )}
 

@@ -2,8 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyExcelColumns } from "@/app/lib/process-excel/verify-excel";
 import { runPythonScript } from "@/app/lib/process-excel/run-python-script";
 import { checkExcelSecurity } from "@/app/lib/utils/file-security";
+import { ErrorCode, getErrorMessage } from "@/app/lib/errors/error-codes";
+import {
+  createErrorResponse,
+  createSuccessResponse,
+  ApiResponse,
+} from "@/app/lib/errors/api-error";
 
-export async function POST(request: NextRequest) {
+interface ProcessResult {
+  matriz_completa: string;
+  matriz_escalera: string;
+  dendrograma: string;
+}
+
+export async function POST(
+  request: NextRequest
+): Promise<NextResponse<ApiResponse<ProcessResult>>> {
   try {
     // Verificar si la solicitud tiene contenido multipart
     const formData = await request.formData();
@@ -11,7 +25,10 @@ export async function POST(request: NextRequest) {
 
     if (!file) {
       return NextResponse.json(
-        { error: "No se ha proporcionado ningún archivo" },
+        createErrorResponse(
+          ErrorCode.FILE_NOT_PROVIDED,
+          getErrorMessage(ErrorCode.FILE_NOT_PROVIDED)
+        ),
         { status: 400 }
       );
     }
@@ -19,7 +36,10 @@ export async function POST(request: NextRequest) {
     // Verificar tipo de archivo
     if (!file.name.endsWith(".xlsx")) {
       return NextResponse.json(
-        { error: "El archivo debe ser de tipo Excel (.xlsx)" },
+        createErrorResponse(
+          ErrorCode.FILE_TYPE_INVALID,
+          getErrorMessage(ErrorCode.FILE_TYPE_INVALID)
+        ),
         { status: 400 }
       );
     }
@@ -28,7 +48,10 @@ export async function POST(request: NextRequest) {
     const fiveMB = 5 * 1024 * 1024;
     if (file.size > fiveMB) {
       return NextResponse.json(
-        { error: "El archivo no debe superar los 5MB" },
+        createErrorResponse(
+          ErrorCode.FILE_SIZE_EXCEEDED,
+          getErrorMessage(ErrorCode.FILE_SIZE_EXCEEDED)
+        ),
         { status: 400 }
       );
     }
@@ -37,7 +60,11 @@ export async function POST(request: NextRequest) {
     const securityResult = await checkExcelSecurity(file);
     if (!securityResult.isSecure) {
       return NextResponse.json(
-        { error: `Archivo inseguro: ${securityResult.reason}` },
+        createErrorResponse(
+          ErrorCode.FILE_INSECURE,
+          getErrorMessage(ErrorCode.FILE_INSECURE),
+          { reason: securityResult.reason }
+        ),
         { status: 400 }
       );
     }
@@ -45,28 +72,28 @@ export async function POST(request: NextRequest) {
     // Verificar columnas requeridas
     const columnVerification = await verifyExcelColumns(file);
     if (!columnVerification.isValid) {
-      let errorMessage =
-        columnVerification.error || "Formato de archivo inválido";
+      let errorCode = ErrorCode.FILE_PARSING_ERROR;
+      const details: Record<string, unknown> = {};
 
+      // Determinar el código de error específico
       if (
         columnVerification.missingColumns &&
         columnVerification.missingColumns.length > 0
       ) {
-        errorMessage += ` Columnas faltantes: ${columnVerification.missingColumns.join(
-          ", "
-        )}`;
-      }
-
-      if (
+        errorCode = ErrorCode.MISSING_COLUMNS;
+        details.missingColumns = columnVerification.missingColumns;
+      } else if (
         columnVerification.emptyColumns &&
         columnVerification.emptyColumns.length > 0
       ) {
-        errorMessage += ` Columnas sin datos: ${columnVerification.emptyColumns.join(
-          ", "
-        )}`;
+        errorCode = ErrorCode.EMPTY_COLUMNS;
+        details.emptyColumns = columnVerification.emptyColumns;
       }
 
-      return NextResponse.json({ error: errorMessage }, { status: 400 });
+      return NextResponse.json(
+        createErrorResponse(errorCode, getErrorMessage(errorCode), details),
+        { status: 400 }
+      );
     }
 
     // Convertir el archivo a Buffer para procesarlo con el script Python
@@ -77,23 +104,51 @@ export async function POST(request: NextRequest) {
     const result = await runPythonScript(buffer);
 
     if (result.error) {
-      return NextResponse.json({ error: result.error }, { status: 500 });
+      return NextResponse.json(
+        createErrorResponse(
+          ErrorCode.PYTHON_EXECUTION_ERROR,
+          getErrorMessage(ErrorCode.PYTHON_EXECUTION_ERROR),
+          { details: result.error }
+        ),
+        { status: 500 }
+      );
+    }
+
+    // Verificar que todas las imágenes se generaron correctamente
+    if (
+      !result.matriz_completa ||
+      !result.matriz_escalera ||
+      !result.dendrograma
+    ) {
+      return NextResponse.json(
+        createErrorResponse(
+          ErrorCode.IMAGES_GENERATION_ERROR,
+          getErrorMessage(ErrorCode.IMAGES_GENERATION_ERROR)
+        ),
+        { status: 500 }
+      );
     }
 
     // Devolver las imágenes en base64
-    return NextResponse.json({
-      success: true,
-      message: "Archivo procesado correctamente",
-      images: {
-        matriz_completa: result.matriz_completa,
-        matriz_escalera: result.matriz_escalera,
-        dendrograma: result.dendrograma,
-      },
-    });
+    return NextResponse.json(
+      createSuccessResponse<ProcessResult>(
+        {
+          matriz_completa: result.matriz_completa,
+          matriz_escalera: result.matriz_escalera,
+          dendrograma: result.dendrograma,
+        },
+        "Archivo procesado correctamente"
+      )
+    );
   } catch (error) {
     console.error("Error procesando archivo Excel:", error);
+
     return NextResponse.json(
-      { error: "Error al procesar el archivo" },
+      createErrorResponse(
+        ErrorCode.SERVER_ERROR,
+        getErrorMessage(ErrorCode.SERVER_ERROR),
+        { error: error instanceof Error ? error.message : String(error) }
+      ),
       { status: 500 }
     );
   }
