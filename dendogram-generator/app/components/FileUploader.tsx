@@ -16,7 +16,6 @@ interface ProcessingResult {
   success: boolean;
   message: string;
   images?: {
-    matriz_completa?: string;
     matriz_escalera?: string;
     dendrograma?: string;
   };
@@ -148,7 +147,6 @@ export default function FileUploader() {
       setProgress(80);
 
       const data = (await response.json()) as ApiResponse<{
-        matriz_completa: string;
         matriz_escalera: string;
         dendrograma: string;
       }>;
@@ -173,7 +171,6 @@ export default function FileUploader() {
         success: true,
         message: data.message || "Archivo procesado correctamente.",
         images: {
-          matriz_completa: data.data.matriz_completa,
           matriz_escalera: data.data.matriz_escalera,
           dendrograma: data.data.dendrograma,
         },
@@ -321,22 +318,6 @@ export default function FileUploader() {
               </h2>
 
               {/* Imágenes generadas */}
-              {processingResult.images.matriz_completa && (
-                <div className="bg-white p-4 rounded-lg shadow">
-                  <h3 className="text-lg font-medium mb-3">
-                    Matriz de Similitud
-                  </h3>
-                  <div className="relative w-full h-[400px] sm:h-[500px]">
-                    <img
-                      src={processingResult.images.matriz_completa}
-                      alt="Matriz de Similitud"
-                      className="w-full object-contain"
-                      style={{ maxHeight: "500px" }}
-                    />
-                  </div>
-                </div>
-              )}
-
               {processingResult.images.matriz_escalera && (
                 <div className="bg-white p-4 rounded-lg shadow">
                   <h3 className="text-lg font-medium mb-3">

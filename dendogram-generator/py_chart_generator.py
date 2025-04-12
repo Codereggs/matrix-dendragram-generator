@@ -148,69 +148,13 @@ def generate_charts(file_path, output_dir=None):
         result_images = {}
         
         try:
-            # -------- MATRIZ DE SIMILITUD MEJORADA --------
+            # Eliminar la generación de la matriz de similitud completa
+            # Solo generaremos la matriz en forma de escalera y el dendrograma
+            
             # Crear un mapa de color personalizado
             cmap = sns.color_palette("Blues", as_cmap=True)
-
-            plt.figure(figsize=(14, 12))
-            ax = plt.subplot(111)
-
-            # Crear mapa de calor con estilo mejorado
-            heatmap = sns.heatmap(similarity_df, 
-                                cmap=cmap,
-                                square=True,
-                                linewidths=.5,
-                                cbar_kws={"shrink": .8, "label": "Similitud (%)"},
-                                xticklabels=labels_short,
-                                yticklabels=labels_short,
-                                vmin=0, 
-                                vmax=100,
-                                annot=True,
-                                fmt=".0f")
-
-            # Mejorar apariencia de números
-            for t in heatmap.texts:
-                # Asegúrate de que todos los valores, incluyendo ceros, sean visibles
-                val = float(t.get_text()) if t.get_text() else 0
-                
-                # Ajustar color del texto según el valor de fondo
-                if val > 50:
-                    t.set_color('white')
-                else:
-                    t.set_color('black')
-
-            # Ajustar etiquetas
-            plt.xticks(rotation=45, ha='right')
-            plt.yticks(rotation=0)
-
-            # Añadir título y ajustar
-            plt.title('Matriz de Similitud de Card Sorting (%)', fontsize=16, pad=20)
-            plt.tight_layout()
-
-            # Guardar en el directorio especificado
-            matrix_full_path = os.path.join(output_dir, 'matriz_similitud_completa.png')
-            plt.savefig(matrix_full_path, dpi=300, bbox_inches='tight')
             
-            # Guardar también como bytes para enviar al frontend
-            image_bytes = BytesIO()
-            plt.savefig(image_bytes, format='png', dpi=300, bbox_inches='tight')
-            image_bytes.seek(0)
-            base64_image = base64.b64encode(image_bytes.read()).decode('utf-8')
-            
-            # Añadir al diccionario de resultados
-            result_images['matriz_completa'] = {
-                'path': matrix_full_path,
-                'base64': base64_image
-            }
-            
-            plt.close()
-            print("Matriz de similitud completa guardada.")
-        except Exception as e:
-            print(f"ERROR: No se pudo generar la matriz de similitud completa: {str(e)}")
-            plt.close()
-        
-        try:
-            # Ahora también crear la versión triangular pero explícitamente marcando los ceros
+            # Crear la versión triangular
             mask = np.triu(np.ones_like(similarity_df, dtype=bool))
 
             plt.figure(figsize=(14, 12))
@@ -267,77 +211,84 @@ def generate_charts(file_path, output_dir=None):
             plt.close()
 
         # -------- DENDOGRAMA MEJORADO HORIZONTAL --------
-        # Usar la distancia de similitud para el dendrograma 
-        distance_matrix = 100 - similarity_percentage
-        np.fill_diagonal(distance_matrix, 0)
-        condensed_distance = squareform(distance_matrix)
+        try:
+            # Usar la distancia de similitud para el dendrograma 
+            distance_matrix = 100 - similarity_percentage
+            np.fill_diagonal(distance_matrix, 0)
+            condensed_distance = squareform(distance_matrix)
 
-        # Calcular el linkage con método promedio (más adecuado para card sorting)
-        linked = linkage(condensed_distance, method='average')
+            # Calcular el linkage con método promedio (más adecuado para card sorting)
+            linked = linkage(condensed_distance, method='average')
 
-        # Crear un dendrograma horizontal más atractivo con colores vibrantes
-        plt.figure(figsize=(14, 10))
+            # Crear un dendrograma horizontal más atractivo con colores vibrantes
+            plt.figure(figsize=(14, 10))
 
-        # Definir un umbral más bajo para obtener más clusters y por tanto más colores
-        umbral_color = 20
+            # Definir un umbral más bajo para obtener más clusters y por tanto más colores
+            umbral_color = 20
 
-        # Definir una paleta de colores más vibrantes
-        colores = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', 
-                '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+            # Definir una paleta de colores más vibrantes
+            colores = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', 
+                    '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
 
-        # Crear dendrograma con colores y orientación horizontal
-        dendro = dendrogram(
-            linked,
-            labels=label_list,
-            orientation='right',
-            leaf_font_size=10,
-            color_threshold=umbral_color,
-            above_threshold_color='#888888',
-            link_color_func=lambda k: colores[k % len(colores)]
-        )
+            # Crear dendrograma con colores y orientación horizontal
+            dendro = dendrogram(
+                linked,
+                labels=label_list,
+                orientation='right',
+                leaf_font_size=10,
+                color_threshold=umbral_color,
+                above_threshold_color='#888888',
+                link_color_func=lambda k: colores[k % len(colores)]
+            )
 
-        plt.title('Analysis - Dendrogram', fontsize=18, pad=20)
-        plt.xlabel('Distance (Lower = Higher Similarity)', fontsize=12)
-        plt.ylabel('Cards', fontsize=12)
+            plt.title('Analysis - Dendrogram', fontsize=18, pad=20)
+            plt.xlabel('Distance (Lower = Higher Similarity)', fontsize=12)
+            plt.ylabel('Cards', fontsize=12)
 
-        # Ajustar la cuadrícula para que sea más sutil pero útil
-        plt.grid(axis='x', linestyle='--', alpha=0.5, color='#CCCCCC')
+            # Ajustar la cuadrícula para que sea más sutil pero útil
+            plt.grid(axis='x', linestyle='--', alpha=0.5, color='#CCCCCC')
 
-        # Mejorar aspecto general
-        plt.axvline(x=umbral_color, c='gray', linestyle='--', alpha=0.3)
-        plt.tight_layout()
+            # Mejorar aspecto general
+            plt.axvline(x=umbral_color, c='gray', linestyle='--', alpha=0.3)
+            plt.tight_layout()
 
-        # Guardar en el directorio especificado
-        dendrogram_path = os.path.join(output_dir, 'dendrograma_card_sorting.png')
-        plt.savefig(dendrogram_path, dpi=300, bbox_inches='tight')
+            # Guardar en el directorio especificado
+            dendrogram_path = os.path.join(output_dir, 'dendrograma_card_sorting.png')
+            plt.savefig(dendrogram_path, dpi=300, bbox_inches='tight')
+            
+            # Guardar también como bytes para enviar al frontend
+            image_bytes = BytesIO()
+            plt.savefig(image_bytes, format='png', dpi=300, bbox_inches='tight')
+            image_bytes.seek(0)
+            base64_image = base64.b64encode(image_bytes.read()).decode('utf-8')
+            
+            # Añadir al diccionario de resultados
+            result_images['dendrograma'] = {
+                'path': dendrogram_path,
+                'base64': base64_image
+            }
+            
+            plt.close()
+            print("Dendrograma guardado.")
+        except Exception as e:
+            print(f"ERROR: No se pudo generar el dendrograma: {str(e)}")
+            plt.close()
         
-        # Guardar también como bytes para enviar al frontend
-        image_bytes = BytesIO()
-        plt.savefig(image_bytes, format='png', dpi=300, bbox_inches='tight')
-        image_bytes.seek(0)
-        base64_image = base64.b64encode(image_bytes.read()).decode('utf-8')
+        # Actualizar las visualizaciones requeridas (eliminamos 'matriz_completa')
+        required_images = ['matriz_escalera', 'dendrograma']
+        missing_images = [img for img in required_images if img not in result_images]
         
-        # Añadir al diccionario de resultados
-        result_images['dendrograma'] = {
-            'path': dendrogram_path,
-            'base64': base64_image
-        }
-        
-        plt.close()
-        print("Dendrograma guardado.")
+        if missing_images:
+            print(f"ERROR: No se pudieron generar las siguientes visualizaciones: {', '.join(missing_images)}")
+            raise ValueError(f"Faltan visualizaciones: {', '.join(missing_images)}")
+
+        return result_images
+
     except Exception as e:
-        print(f"ERROR: No se pudo generar el dendrograma: {str(e)}")
-        plt.close()
-    
-    # Verificar que se hayan generado todas las visualizaciones necesarias
-    required_images = ['matriz_completa', 'matriz_escalera', 'dendrograma']
-    missing_images = [img for img in required_images if img not in result_images]
-    
-    if missing_images:
-        print(f"ERROR: No se pudieron generar las siguientes visualizaciones: {', '.join(missing_images)}")
-        raise ValueError(f"Faltan visualizaciones: {', '.join(missing_images)}")
-
-    return result_images
+        print(f"ERROR GENERAL: {str(e)}")
+        # Asegurarnos de cerrar todas las figuras en caso de error
+        plt.close('all')
+        raise e
 
 # Si se ejecuta directamente como script, procesar el archivo proporcionado
 if __name__ == "__main__":

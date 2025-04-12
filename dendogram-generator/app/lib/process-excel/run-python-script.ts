@@ -9,10 +9,10 @@ const mkdtempAsync = promisify(fs.mkdtemp);
 const writeFileAsync = promisify(fs.writeFile);
 
 interface PythonScriptResult {
-  matriz_completa?: string;
   matriz_escalera?: string;
   dendrograma?: string;
   error?: string;
+  details?: string;
 }
 
 /**
@@ -37,76 +37,133 @@ export async function runPythonScript(
     // Obtener la ruta del script Python (relativa al directorio del proyecto)
     const scriptPath = path.resolve(process.cwd(), "py_chart_generator.py");
 
-    // Ejecutar el script Python
-    const { stdout, stderr } = await execAsync(
-      `python ${scriptPath} "${tempFilePath}" "${tempDir}"`
-    );
+    console.log("Ejecutando script Python:", scriptPath);
+    console.log("Archivo de entrada:", tempFilePath);
+    console.log("Directorio de salida:", tempDir);
 
-    // Verificamos si hay mensajes de error en la salida
-    if (stderr) {
-      // Separamos los errores de las advertencias (UserWarning son comunes en matplotlib y no son críticos)
-      const isRealError =
-        stderr.includes("ERROR:") ||
-        stderr.includes("ERROR INESPERADO:") ||
-        stderr.includes("ERROR CRÍTICO:") ||
-        (!stderr.includes("UserWarning") && stderr.length > 0);
-
-      if (isRealError) {
-        console.error("Error desde Python:", stderr);
-
-        // Intentar extraer el mensaje de error específico
-        const errorMatch = stderr.match(/ERROR:?\s*(.*)/);
-        const errorMessage = errorMatch
-          ? errorMatch[1]
-          : "Error al ejecutar el script Python.";
-
-        return { error: errorMessage };
-      } else {
-        // Solo son advertencias, podemos continuar
-        console.log("Advertencias desde Python (no críticas):", stderr);
-      }
-    }
-
-    console.log("Salida de Python:", stdout);
-
-    // Leer las imágenes generadas
-    const matrixFullPath = path.join(tempDir, "matriz_similitud_completa.png");
-    const matrixStairPath = path.join(tempDir, "matriz_similitud_escalera.png");
-    const dendrogramPath = path.join(tempDir, "dendrograma_card_sorting.png");
-
-    const matrixFullExists = fs.existsSync(matrixFullPath);
-    const matrixStairExists = fs.existsSync(matrixStairPath);
-    const dendrogramExists = fs.existsSync(dendrogramPath);
-
-    if (!matrixFullExists || !matrixStairExists || !dendrogramExists) {
-      return { error: "No se generaron todas las imágenes." };
-    }
-
-    // Convertir las imágenes a base64
-    const matrixFullBase64 = fs.readFileSync(matrixFullPath).toString("base64");
-    const matrixStairBase64 = fs
-      .readFileSync(matrixStairPath)
-      .toString("base64");
-    const dendrogramBase64 = fs.readFileSync(dendrogramPath).toString("base64");
-
-    // Limpieza: eliminar archivos temporales
     try {
-      fs.unlinkSync(tempFilePath);
-      fs.unlinkSync(matrixFullPath);
-      fs.unlinkSync(matrixStairPath);
-      fs.unlinkSync(dendrogramPath);
-      fs.rmdirSync(tempDir);
-    } catch (cleanupError) {
-      console.warn("Error al limpiar archivos temporales:", cleanupError);
-    }
+      // Escapar las rutas para manejar espacios y caracteres especiales
+      const escapedScriptPath = `"${scriptPath}"`;
+      const escapedTempFilePath = `"${tempFilePath}"`;
+      const escapedTempDir = `"${tempDir}"`;
 
-    return {
-      matriz_completa: `data:image/png;base64,${matrixFullBase64}`,
-      matriz_escalera: `data:image/png;base64,${matrixStairBase64}`,
-      dendrograma: `data:image/png;base64,${dendrogramBase64}`,
-    };
+      // Detectar si estamos en un entorno Linux (probable en Vercel)
+      const isLinux = os.platform() === "linux";
+
+      // Configurar el comando Python basado en el entorno
+      const pythonCommand = isLinux ? "python3" : "python3";
+
+      // Ejecutar el script Python con un timeout más largo (3 minutos)
+      const { stdout, stderr } = await execAsync(
+        `${pythonCommand} ${escapedScriptPath} ${escapedTempFilePath} ${escapedTempDir}`,
+        { timeout: 180000 }
+      );
+
+      // Verificamos si hay mensajes de error en la salida
+      if (stderr) {
+        // Separamos los errores de las advertencias (UserWarning son comunes en matplotlib y no son críticos)
+        const isRealError =
+          stderr.includes("ERROR:") ||
+          stderr.includes("ERROR INESPERADO:") ||
+          stderr.includes("ERROR CRÍTICO:") ||
+          stderr.includes("ERROR GENERAL:") ||
+          (!stderr.includes("UserWarning") && stderr.length > 0);
+
+        if (isRealError) {
+          console.error("Error desde Python:", stderr);
+
+          // Intentar extraer el mensaje de error específico
+          const errorMatch = stderr.match(/ERROR:?\s*(.*)/);
+          const errorMessage = errorMatch
+            ? errorMatch[1]
+            : "Error al ejecutar el script Python.";
+
+          return {
+            error: errorMessage,
+            details: stderr,
+          };
+        } else {
+          // Solo son advertencias, podemos continuar
+          console.log("Advertencias desde Python (no críticas):", stderr);
+        }
+      }
+
+      console.log("Salida de Python:", stdout);
+
+      // Leer las imágenes generadas
+      const matrixStairPath = path.join(
+        tempDir,
+        "matriz_similitud_escalera.png"
+      );
+      const dendrogramPath = path.join(tempDir, "dendrograma_card_sorting.png");
+
+      const matrixStairExists = fs.existsSync(matrixStairPath);
+      const dendrogramExists = fs.existsSync(dendrogramPath);
+
+      // Verificar si se generaron todas las imágenes
+      if (!matrixStairExists || !dendrogramExists) {
+        console.error("No se generaron todas las imágenes esperadas:");
+        console.error(`matriz_escalera: ${matrixStairExists}`);
+        console.error(`dendrograma: ${dendrogramExists}`);
+        return {
+          error: "No se generaron todas las imágenes.",
+          details: `Archivos generados: matriz_escalera: ${matrixStairExists}, dendrograma: ${dendrogramExists}`,
+        };
+      }
+
+      // Convertir las imágenes a base64
+      const matrixStairBase64 = fs
+        .readFileSync(matrixStairPath)
+        .toString("base64");
+      const dendrogramBase64 = fs
+        .readFileSync(dendrogramPath)
+        .toString("base64");
+
+      // Limpieza: eliminar archivos temporales
+      try {
+        fs.unlinkSync(tempFilePath);
+        fs.unlinkSync(matrixStairPath);
+        fs.unlinkSync(dendrogramPath);
+        fs.rmdirSync(tempDir);
+      } catch (cleanupError) {
+        console.warn("Error al limpiar archivos temporales:", cleanupError);
+      }
+
+      return {
+        matriz_escalera: `data:image/png;base64,${matrixStairBase64}`,
+        dendrograma: `data:image/png;base64,${dendrogramBase64}`,
+      };
+    } catch (execError: unknown) {
+      // Error específico de la ejecución del comando
+      console.error("Error al ejecutar el comando Python:", execError);
+
+      // Extraer información más detallada del error
+      const errorDetails =
+        execError instanceof Error
+          ? execError.message
+          : typeof execError === "object" && execError !== null
+          ? JSON.stringify(execError)
+          : String(execError);
+
+      const timeout = errorDetails.includes("timeout");
+
+      if (timeout) {
+        return {
+          error: "La ejecución del script Python tomó demasiado tiempo.",
+          details: errorDetails,
+        };
+      }
+
+      return {
+        error: "Error al ejecutar el script Python.",
+        details: errorDetails,
+      };
+    }
   } catch (error) {
-    console.error("Error al ejecutar el script Python:", error);
-    return { error: "Error al procesar el archivo." };
+    console.error("Error general al procesar el archivo:", error);
+    return {
+      error: "Error al procesar el archivo.",
+      details: error instanceof Error ? error.message : String(error),
+    };
   }
 }
