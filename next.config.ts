@@ -32,7 +32,7 @@ const securityHeaders = [
       script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-analytics.com https://vercel.com https://${process.env.API_URL};
       style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
       font-src 'self' https://fonts.gstatic.com;
-      img-src 'self' data:;
+      img-src 'self' data: https://cdn.cafecito.app cdn.cafecito.app;
       connect-src 'self' https://va.vercel-analytics.com https://vercel.com https://${process.env.API_URL};
       frame-src 'none';
       object-src 'none';
@@ -67,6 +67,13 @@ const nextConfig: NextConfig = {
         destination: `${process.env.NEXT_PUBLIC_API_URL}/api/:path*`,
       },
     ];
+  },
+  images: {
+    remotePatterns: [
+      {
+        hostname: "cdn.cafecito.app",
+      },
+    ],
   },
 };
 
