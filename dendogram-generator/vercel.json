@@ -1,0 +1,14 @@
+{
+  "functions": {
+    "app/api/python/process-excel/index.py": {
+      "runtime": "python3.9",
+      "memory": 3008,
+      "maxDuration": 300
+    }
+  },
+  "builds": [{ "src": "package.json", "use": "@vercel/next" }],
+  "routes": [
+    { "src": "/api/python/(.*)", "dest": "/app/api/python/$1" },
+    { "src": "/(.*)", "dest": "/$1" }
+  ]
+}

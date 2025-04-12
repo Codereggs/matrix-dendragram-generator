@@ -63,6 +63,16 @@ const nextConfig: NextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["exceljs"],
   },
+
+  // Configuración para Python serverless
+  rewrites: async () => {
+    return [
+      {
+        source: "/api/python/:path*",
+        destination: "/api/python/:path*",
+      },
+    ];
+  },
 };
 
 export default nextConfig;
