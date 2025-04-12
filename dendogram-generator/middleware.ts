@@ -1,16 +1,13 @@
 import { NextResponse } from "next/server";
 
 /**
- * Middleware para agregar cabeceras de seguridad a todas las respuestas
- *
- * @returns Respuesta con cabeceras de seguridad
+ * Middleware para agregar cabeceras de seguridad
  */
-export function middleware() {
+export async function middleware() {
   // Obtener la respuesta original
   const response = NextResponse.next();
 
   // Agregar cabeceras de seguridad
-
   // Content-Security-Policy - Proporciona una capa adicional de seguridad
   response.headers.set(
     "Content-Security-Policy",
@@ -49,13 +46,7 @@ export function middleware() {
  */
 export const config = {
   matcher: [
-    /*
-     * Coincide con todos estos casos:
-     * - /_next/image (para optimización de imágenes)
-     * - /_next/static (para recursos estáticos)
-     * - /favicon.ico, /sitemap.xml, /robots.txt (recursos comunes)
-     * - Las rutas api no se incluyen ya que la configuración está en next.config.ts
-     */
+    // Excluir archivos estáticos, favicons, etc.
     "/((?!_next/image|_next/static|favicon.ico|sitemap.xml|robots.txt).*)",
   ],
 };

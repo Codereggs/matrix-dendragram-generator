@@ -1,3 +1,4 @@
+from http.server import BaseHTTPRequestHandler
 import json
 import base64
 import io
@@ -8,11 +9,12 @@ import pandas as pd
 import numpy as np
 import tempfile
 import gc  # Garbage collector
+from fastapi import Response
 
 # Configuración global para reducir uso de memoria
 np.set_printoptions(precision=4)  # Reducir precisión para ahorrar memoria
 
-def handler(request):
+def POST(request):
     temp_path = None
     try:
         print("========== INICIO API PREPROCESAMIENTO ==========")
@@ -23,10 +25,11 @@ def handler(request):
         
         # Obtener datos de la solicitud
         try:
-            # Leer el cuerpo de la solicitud
-            body = json.loads(request.body)
+            # En Next.js, se debe usar await request.json()
+            # Ya que esto es una función de ruta Python, debemos acceder al cuerpo de otra manera
+            data = request.json
             
-            if 'fileBase64' not in body:
+            if 'fileBase64' not in data:
                 error_response = {
                     'success': False,
                     'error': {
@@ -34,33 +37,27 @@ def handler(request):
                         'message': "No se proporcionó un archivo válido"
                     }
                 }
-                return {
-                    "statusCode": 400,
-                    "body": json.dumps(error_response)
-                }
+                return error_response
             
             # Verificar el tamaño del base64
-            base64_len = len(body['fileBase64'])
+            base64_len = len(data['fileBase64'])
             print(f"Longitud de datos base64 recibidos: {base64_len}")
             
             # Decodificar el archivo desde base64
-            file_content = base64.b64decode(body['fileBase64'])
+            file_content = base64.b64decode(data['fileBase64'])
             print(f"Archivo decodificado, tamaño: {len(file_content)} bytes")
-            del body  # Liberar memoria
+            del data  # Liberar memoria
             gc.collect()
         except Exception as e:
             error_msg = f"Error al procesar JSON de entrada: {str(e)}"
             print(error_msg)
             traceback.print_exc()
             return {
-                "statusCode": 400,
-                "body": json.dumps({
-                    'success': False,
-                    'error': {
-                        'code': 'preprocessing_error',
-                        'message': error_msg
-                    }
-                })
+                'success': False,
+                'error': {
+                    'code': 'preprocessing_error',
+                    'message': error_msg
+                }
             }
         
         # Crear un archivo temporal para almacenar los datos
@@ -79,14 +76,11 @@ def handler(request):
             print(error_msg)
             traceback.print_exc()
             return {
-                "statusCode": 400,
-                "body": json.dumps({
-                    'success': False,
-                    'error': {
-                        'code': 'preprocessing_error',
-                        'message': error_msg
-                    }
-                })
+                'success': False,
+                'error': {
+                    'code': 'preprocessing_error',
+                    'message': error_msg
+                }
             }
         
         try:
@@ -108,14 +102,11 @@ def handler(request):
                     error_msg = f"Columnas faltantes: {', '.join(missing_columns)}"
                     print(f"Error: {error_msg}")
                     return {
-                        "statusCode": 400,
-                        "body": json.dumps({
-                            'success': False,
-                            'error': {
-                                'code': 'preprocessing_error',
-                                'message': error_msg
-                            }
-                        })
+                        'success': False,
+                        'error': {
+                            'code': 'preprocessing_error',
+                            'message': error_msg
+                        }
                     }
                 
                 print(f"Datos cargados: {df.shape[0]} filas, {df.shape[1]} columnas")
@@ -124,14 +115,11 @@ def handler(request):
                 print(error_msg)
                 traceback.print_exc()
                 return {
-                    "statusCode": 400,
-                    "body": json.dumps({
-                        'success': False,
-                        'error': {
-                            'code': 'preprocessing_error',
-                            'message': error_msg
-                        }
-                    })
+                    'success': False,
+                    'error': {
+                        'code': 'preprocessing_error',
+                        'message': error_msg
+                    }
                 }
             
             # Liberar memoria del archivo temporal
@@ -176,16 +164,13 @@ def handler(request):
             print("Preprocesamiento completado, enviando respuesta...")
             
             return {
-                "statusCode": 200,
-                "body": json.dumps({
-                    'success': True,
-                    'data': {
-                        'descriptions': descriptions,
-                        'unique_ids': unique_ids,
-                        'id_url_mapping': id_url_mapping
-                    },
-                    'message': 'Archivo preprocesado correctamente'
-                })
+                'success': True,
+                'data': {
+                    'descriptions': descriptions,
+                    'unique_ids': unique_ids,
+                    'id_url_mapping': id_url_mapping
+                },
+                'message': 'Archivo preprocesado correctamente'
             }
             
         except Exception as e:
@@ -193,14 +178,11 @@ def handler(request):
             print(error_msg)
             traceback.print_exc()
             return {
-                "statusCode": 400,
-                "body": json.dumps({
-                    'success': False,
-                    'error': {
-                        'code': 'preprocessing_error',
-                        'message': error_msg
-                    }
-                })
+                'success': False,
+                'error': {
+                    'code': 'preprocessing_error',
+                    'message': error_msg
+                }
             }
         finally:
             # Limpiar archivos temporales
@@ -216,12 +198,9 @@ def handler(request):
         print(error_msg)
         traceback.print_exc()
         return {
-            "statusCode": 500,
-            "body": json.dumps({
-                'success': False,
-                'error': {
-                    'code': 'preprocessing_error',
-                    'message': error_msg
-                }
-            })
+            'success': False,
+            'error': {
+                'code': 'preprocessing_error',
+                'message': error_msg
+            }
         } 

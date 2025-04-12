@@ -7,6 +7,7 @@ import gc  # Garbage collector
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 from scipy.cluster.hierarchy import linkage, dendrogram
+from fastapi import Response
 
 # Configuración global para reducir uso de memoria
 np.set_printoptions(precision=4)  # Reducir precisión para ahorrar memoria
@@ -21,7 +22,7 @@ class NumpyEncoder(json.JSONEncoder):
             return int(obj)
         return json.JSONEncoder.default(self, obj)
 
-def handler(request):
+def POST(request):
     try:
         print("========== INICIO API ANÁLISIS ==========")
         print(f"Python version: {sys.version}")
@@ -30,21 +31,19 @@ def handler(request):
         
         # Obtener datos de la solicitud
         try:
-            # Leer el cuerpo de la solicitud
-            data = json.loads(request.body)
+            # En Next.js, se debe usar await request.json()
+            # Ya que esto es una función de ruta Python, debemos acceder al cuerpo de otra manera
+            data = request.json
         except Exception as e:
             error_msg = f"Error al procesar JSON de entrada: {str(e)}"
             print(error_msg)
             traceback.print_exc()
             return {
-                "statusCode": 400,
-                "body": json.dumps({
-                    'success': False,
-                    'error': {
-                        'code': 'analysis_error',
-                        'message': error_msg
-                    }
-                })
+                'success': False,
+                'error': {
+                    'code': 'analysis_error',
+                    'message': error_msg
+                }
             }
         
         # Verificar que tengamos los datos necesarios
@@ -56,14 +55,11 @@ def handler(request):
             error_msg = f"Datos de entrada incompletos. Faltan: {', '.join(missing_keys)}"
             print(error_msg)
             return {
-                "statusCode": 400,
-                "body": json.dumps({
-                    'success': False,
-                    'error': {
-                        'code': 'analysis_error',
-                        'message': error_msg
-                    }
-                })
+                'success': False,
+                'error': {
+                    'code': 'analysis_error',
+                    'message': error_msg
+                }
             }
         
         try:
@@ -81,14 +77,11 @@ def handler(request):
             print(error_msg)
             traceback.print_exc()
             return {
-                "statusCode": 400,
-                "body": json.dumps({
-                    'success': False,
-                    'error': {
-                        'code': 'analysis_error',
-                        'message': error_msg
-                    }
-                })
+                'success': False,
+                'error': {
+                    'code': 'analysis_error',
+                    'message': error_msg
+                }
             }
         
         try:
@@ -109,14 +102,11 @@ def handler(request):
                 print(error_msg)
                 traceback.print_exc()
                 return {
-                    "statusCode": 400,
-                    "body": json.dumps({
-                        'success': False,
-                        'error': {
-                            'code': 'analysis_error',
-                            'message': error_msg
-                        }
-                    })
+                    'success': False,
+                    'error': {
+                        'code': 'analysis_error',
+                        'message': error_msg
+                    }
                 }
             
             # Liberar memoria
@@ -134,14 +124,11 @@ def handler(request):
                 print(error_msg)
                 traceback.print_exc()
                 return {
-                    "statusCode": 400,
-                    "body": json.dumps({
-                        'success': False,
-                        'error': {
-                            'code': 'analysis_error',
-                            'message': error_msg
-                        }
-                    })
+                    'success': False,
+                    'error': {
+                        'code': 'analysis_error',
+                        'message': error_msg
+                    }
                 }
             
             # Liberar memoria
@@ -160,14 +147,11 @@ def handler(request):
                 print(error_msg)
                 traceback.print_exc()
                 return {
-                    "statusCode": 400,
-                    "body": json.dumps({
-                        'success': False,
-                        'error': {
-                            'code': 'analysis_error',
-                            'message': error_msg
-                        }
-                    })
+                    'success': False,
+                    'error': {
+                        'code': 'analysis_error',
+                        'message': error_msg
+                    }
                 }
             
             # Convertir dendrograma para frontend
@@ -200,14 +184,11 @@ def handler(request):
                 print(error_msg)
                 traceback.print_exc()
                 return {
-                    "statusCode": 400,
-                    "body": json.dumps({
-                        'success': False,
-                        'error': {
-                            'code': 'analysis_error',
-                            'message': error_msg
-                        }
-                    })
+                    'success': False,
+                    'error': {
+                        'code': 'analysis_error',
+                        'message': error_msg
+                    }
                 }
             
             # Liberar memoria
@@ -218,56 +199,38 @@ def handler(request):
             # IDs ordenados para el frontend
             ordered_ids = [str(unique_ids[idx]) for idx in ordered_indices]
             
-            # Preparar URLs ordenadas
-            ordered_urls = []
-            for id_val in ordered_ids:
-                if id_val in id_url_mapping:
-                    ordered_urls.append(id_url_mapping[id_val])
-                else:
-                    ordered_urls.append("")
+            # Devolver resultado como datos JSON
+            print("Análisis completado con éxito, enviando respuesta...")
             
-            # Crear resultado final
+            # Usando el NumpyEncoder para convertir los arrays de NumPy a listas
             result = {
-                'heatmap': {
-                    'data': heatmap_data,
-                    'ids': ordered_ids,
-                    'urls': ordered_urls
-                },
-                'dendrogram': frontend_dendro_data,
-                'metadata': {
-                    'item_count': len(ordered_ids),
-                    'processing_time': None  # Se podría agregar tiempo de procesamiento
-                }
-            }
-            
-            # Devolver resultado
-            print("Análisis completado, enviando respuesta...")
-            
-            # Usar el encoder de NumPy para convertir correctamente los tipos
-            json_result = json.dumps({
                 'success': True,
-                'data': result,
+                'data': {
+                    'heatmap': {
+                        'z': heatmap_data,
+                        'ids': ordered_ids
+                    },
+                    'dendrogram': frontend_dendro_data,
+                    'metadata': {
+                        'id_url_mapping': id_url_mapping
+                    }
+                },
                 'message': 'Análisis completado correctamente'
-            }, cls=NumpyEncoder)
-            
-            return {
-                "statusCode": 200,
-                "body": json_result
             }
+            
+            # Convertir a JSON manualmente para manejar los tipos de NumPy
+            return json.loads(json.dumps(result, cls=NumpyEncoder))
             
         except Exception as e:
             error_msg = f"Error al analizar los datos: {str(e)}"
             print(error_msg)
             traceback.print_exc()
             return {
-                "statusCode": 500,
-                "body": json.dumps({
-                    'success': False,
-                    'error': {
-                        'code': 'analysis_error',
-                        'message': error_msg
-                    }
-                })
+                'success': False,
+                'error': {
+                    'code': 'analysis_error',
+                    'message': error_msg
+                }
             }
             
     except Exception as e:
@@ -275,12 +238,9 @@ def handler(request):
         print(error_msg)
         traceback.print_exc()
         return {
-            "statusCode": 500,
-            "body": json.dumps({
-                'success': False,
-                'error': {
-                    'code': 'analysis_error',
-                    'message': error_msg
-                }
-            })
+            'success': False,
+            'error': {
+                'code': 'analysis_error',
+                'message': error_msg
+            }
         } 

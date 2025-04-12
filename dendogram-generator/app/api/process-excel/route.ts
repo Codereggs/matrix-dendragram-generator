@@ -33,6 +33,43 @@ export async function POST(
     // Verificar si estamos en modo de prueba
     const testMode = request.nextUrl.searchParams.has("test");
 
+    console.log(`Modo de prueba: ${testMode ? "activado" : "desactivado"}`);
+
+    // En modo de prueba, podemos devolver directamente datos simulados
+    if (testMode) {
+      console.log("Usando modo de prueba - Generando respuesta simulada");
+      return NextResponse.json(
+        createSuccessResponse<ProcessResult>(
+          {
+            heatmap: {
+              z: [
+                [1.0, 0.5, 0.3],
+                [0.5, 1.0, 0.7],
+                [0.3, 0.7, 1.0],
+              ],
+              ids: ["1", "2", "3"],
+            },
+            dendrogram: {
+              ivl: ["1", "2", "3"],
+              dcoord: [
+                [0, 1, 0, 0],
+                [0, 2, 0, 0],
+              ],
+              icoord: [
+                [0, 0, 1, 1],
+                [0, 0, 2, 2],
+              ],
+              color_list: ["blue", "red"],
+            },
+            metadata: {
+              id_url_mapping: { "1": "url1", "2": "url2", "3": "url3" },
+            },
+          },
+          "Datos de prueba generados correctamente"
+        )
+      );
+    }
+
     // Verificar el tipo de contenido para determinar si es JSON o FormData
     const contentType = request.headers.get("content-type") || "";
     let file: File | null = null;
@@ -189,110 +226,186 @@ export async function POST(
         // Convertir el archivo a base64 para enviarlo como JSON
         const fileBase64 = fileBuffer.toString("base64");
 
+        // Si estamos en modo de prueba, imprimimos detalles adicionales
+        if (testMode) {
+          console.log("MODO DE PRUEBA - Detalles adicionales:");
+          console.log(
+            `Tamaño del archivo base64: ${fileBase64.length} caracteres`
+          );
+          console.log(
+            `Primeros 100 caracteres: ${fileBase64.substring(0, 100)}...`
+          );
+        }
+
         console.log("Iniciando fase 1: Preprocesamiento...");
 
-        // Primera fase: Preprocesamiento
-        const preprocess = await fetch("/api/preprocess", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            fileBase64,
-          }),
-        });
+        // Determinar si estamos en desarrollo o producción
+        const host = request.headers.get("host") || "";
+        const protocol = host.includes("localhost") ? "http" : "https";
+        const baseUrl = `${protocol}://${host}`;
 
-        if (!preprocess.ok) {
-          const errorText = await preprocess.text();
-          console.error("Error en la fase de preprocesamiento:", errorText);
-          return NextResponse.json(
-            createErrorResponse(
-              ErrorCode.PYTHON_EXECUTION_ERROR,
-              "Error en la fase de preprocesamiento",
-              { details: errorText }
-            ),
-            { status: 500 }
+        try {
+          // Primera fase: Preprocesamiento
+          console.log(
+            `Llamando a API de preprocesamiento: ${baseUrl}/api/preprocess`
           );
-        }
-
-        // Extraer datos preprocesados
-        const preprocessResult = await preprocess.json();
-
-        if (!preprocessResult.success) {
-          console.error(
-            "Error reportado en la fase de preprocesamiento:",
-            preprocessResult.error
-          );
-          return NextResponse.json(
-            createErrorResponse(
-              ErrorCode.PYTHON_EXECUTION_ERROR,
-              preprocessResult.error?.message ||
-                "Error en el preprocesamiento de datos",
-              { details: JSON.stringify(preprocessResult.error) }
-            ),
-            { status: 500 }
-          );
-        }
-
-        console.log("Fase 1 completada. Iniciando fase 2: Análisis...");
-
-        // Segunda fase: Análisis
-        const analyze = await fetch("/api/analyze", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            descriptions: preprocessResult.data.descriptions,
-            unique_ids: preprocessResult.data.unique_ids,
-            id_url_mapping: preprocessResult.data.id_url_mapping,
-          }),
-        });
-
-        if (!analyze.ok) {
-          const errorText = await analyze.text();
-          console.error("Error en la fase de análisis:", errorText);
-          return NextResponse.json(
-            createErrorResponse(
-              ErrorCode.PYTHON_EXECUTION_ERROR,
-              "Error en la fase de análisis",
-              { details: errorText }
-            ),
-            { status: 500 }
-          );
-        }
-
-        // Obtener resultado final
-        const analyzeResult = await analyze.json();
-
-        if (!analyzeResult.success) {
-          console.error(
-            "Error reportado en la fase de análisis:",
-            analyzeResult.error
-          );
-          return NextResponse.json(
-            createErrorResponse(
-              ErrorCode.PYTHON_EXECUTION_ERROR,
-              analyzeResult.error?.message || "Error en el análisis de datos",
-              { details: JSON.stringify(analyzeResult.error) }
-            ),
-            { status: 500 }
-          );
-        }
-
-        console.log("Fase 2 completada. Procesamiento exitoso.");
-
-        // Devolver el resultado final
-        return NextResponse.json(
-          createSuccessResponse<ProcessResult>(
-            {
-              heatmap: analyzeResult.data.heatmap,
-              dendrogram: analyzeResult.data.dendrogram,
-              metadata: analyzeResult.data.metadata,
+          const preprocess = await fetch(`${baseUrl}/api/preprocess`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
             },
-            "Archivo procesado correctamente"
-          )
-        );
+            body: JSON.stringify({
+              fileBase64,
+            }),
+          });
+
+          console.log(
+            `Respuesta de la API de preprocesamiento: ${preprocess.status} ${preprocess.statusText}`
+          );
+
+          if (!preprocess.ok) {
+            const errorText = await preprocess.text();
+            console.error("Error en la fase de preprocesamiento:", errorText);
+            console.error("Status code:", preprocess.status);
+            try {
+              // Intentar parsear como JSON para obtener más detalles
+              const errorJson = JSON.parse(errorText);
+              console.error("Detalles del error:", errorJson);
+              return NextResponse.json(
+                createErrorResponse(
+                  ErrorCode.PYTHON_EXECUTION_ERROR,
+                  "Error en la fase de preprocesamiento",
+                  { details: errorJson }
+                ),
+                { status: 500 }
+              );
+            } catch {
+              // Si no es JSON, usar el texto tal cual
+              return NextResponse.json(
+                createErrorResponse(
+                  ErrorCode.PYTHON_EXECUTION_ERROR,
+                  "Error en la fase de preprocesamiento",
+                  { details: errorText, status: preprocess.status }
+                ),
+                { status: 500 }
+              );
+            }
+          }
+
+          // Extraer datos preprocesados
+          const preprocessResult = await preprocess.json();
+
+          if (!preprocessResult.success) {
+            console.error(
+              "Error reportado en la fase de preprocesamiento:",
+              preprocessResult.error
+            );
+            return NextResponse.json(
+              createErrorResponse(
+                ErrorCode.PYTHON_EXECUTION_ERROR,
+                preprocessResult.error?.message ||
+                  "Error en el preprocesamiento de datos",
+                { details: JSON.stringify(preprocessResult.error) }
+              ),
+              { status: 500 }
+            );
+          }
+
+          console.log("Fase 1 completada. Iniciando fase 2: Análisis...");
+
+          // Segunda fase: Análisis
+          console.log(`Llamando a API de análisis: ${baseUrl}/api/analyze`);
+          const analyze = await fetch(`${baseUrl}/api/analyze`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              descriptions: preprocessResult.data.descriptions,
+              unique_ids: preprocessResult.data.unique_ids,
+              id_url_mapping: preprocessResult.data.id_url_mapping,
+            }),
+          });
+
+          if (!analyze.ok) {
+            const errorText = await analyze.text();
+            console.error("Error en la fase de análisis:", errorText);
+            return NextResponse.json(
+              createErrorResponse(
+                ErrorCode.PYTHON_EXECUTION_ERROR,
+                "Error en la fase de análisis",
+                { details: errorText }
+              ),
+              { status: 500 }
+            );
+          }
+
+          // Obtener resultado final
+          const analyzeResult = await analyze.json();
+
+          if (!analyzeResult.success) {
+            console.error(
+              "Error reportado en la fase de análisis:",
+              analyzeResult.error
+            );
+            return NextResponse.json(
+              createErrorResponse(
+                ErrorCode.PYTHON_EXECUTION_ERROR,
+                analyzeResult.error?.message || "Error en el análisis de datos",
+                { details: JSON.stringify(analyzeResult.error) }
+              ),
+              { status: 500 }
+            );
+          }
+
+          console.log("Fase 2 completada. Procesamiento exitoso.");
+
+          // Devolver el resultado final
+          return NextResponse.json(
+            createSuccessResponse<ProcessResult>(
+              {
+                heatmap: analyzeResult.data.heatmap,
+                dendrogram: analyzeResult.data.dendrogram,
+                metadata: analyzeResult.data.metadata,
+              },
+              "Archivo procesado correctamente"
+            )
+          );
+        } catch (error) {
+          console.error("Error al procesar con funciones serverless:", error);
+
+          // Verificar si es un error de timeout
+          const isTimeout =
+            error instanceof Error &&
+            (error.name === "AbortError" ||
+              error.message.includes("timeout") ||
+              error.message.includes("aborted"));
+
+          if (isTimeout) {
+            return NextResponse.json(
+              createErrorResponse(
+                ErrorCode.SERVER_ERROR,
+                "El procesamiento tomó demasiado tiempo",
+                {
+                  details:
+                    "La función no respondió dentro del tiempo límite. Intente con un archivo más pequeño.",
+                }
+              ),
+              { status: 500 }
+            );
+          }
+
+          return NextResponse.json(
+            createErrorResponse(
+              ErrorCode.SERVER_ERROR,
+              "Error al procesar con funciones serverless",
+              {
+                details: error instanceof Error ? error.message : String(error),
+              }
+            ),
+            { status: 500 }
+          );
+        }
       } catch (error) {
         console.error("Error al procesar con funciones serverless:", error);
 
