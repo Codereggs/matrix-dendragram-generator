@@ -1,5 +1,19 @@
 # Generador de Dendrogramas y Matrices
 
+## En principio la finalidad de la app:
+
+Esta app esta hecha para ayudar a los estudiantes de UX a conseguir su dendrogram y matriz de similitud sin abonar tanta plata. Utilizando tecnicas programáticas que puedan ayudarles.
+
+Por ej. Pueden acceder a la página de https://app.optimalworkshop.com/
+
+Registrarse, y luego elaborar su card sorting. Despúes de ello, al tener los resultados con 2 participantes van a tener la opción de descargar el raw file que les ayudara para poder generar con esta app su dendrograma y la matriz de similitud.
+
+Ejemplo:
+
+https://drive.google.com/file/d/1tDOTDomEGyc3jglHOEG5Im__kAiwh9QP/view?usp=sharing
+
+## Detalles técnicos:
+
 Este proyecto consta de dos partes:
 
 1. Un frontend desarrollado con Next.js
