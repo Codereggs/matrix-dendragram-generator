@@ -11,6 +11,19 @@ const writeFileAsync = promisify(fs.writeFile);
 interface PythonScriptResult {
   matriz_escalera?: string;
   dendrograma?: string;
+  heatmap?: {
+    z: number[][];
+    ids: string[];
+  };
+  dendrogram?: {
+    ivl: string[];
+    dcoord: number[][];
+    icoord: number[][];
+    color_list?: string[];
+  };
+  metadata?: {
+    id_url_mapping: Record<string, string>;
+  };
   error?: string;
   details?: string;
 }

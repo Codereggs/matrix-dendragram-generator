@@ -10,8 +10,21 @@ import {
 } from "@/app/lib/errors/api-error";
 
 interface ProcessResult {
-  matriz_escalera: string;
-  dendrograma: string;
+  matriz_escalera?: string;
+  dendrograma?: string;
+  heatmap?: {
+    z: number[][];
+    ids: string[];
+  };
+  dendrogram?: {
+    ivl: string[];
+    dcoord: number[][];
+    icoord: number[][];
+    color_list?: string[];
+  };
+  metadata?: {
+    id_url_mapping: Record<string, string>;
+  };
 }
 
 export async function POST(
@@ -21,11 +34,73 @@ export async function POST(
     // Verificar si estamos en modo de prueba
     const testMode = request.nextUrl.searchParams.has("test");
 
-    // Verificar si la solicitud tiene contenido multipart
-    const formData = await request.formData();
-    const file = formData.get("file") as File | null;
+    // Verificar el tipo de contenido para determinar si es JSON o FormData
+    const contentType = request.headers.get("content-type") || "";
+    let file: File | null = null;
+    let fileBuffer: Buffer | null = null;
 
-    if (!file) {
+    if (contentType.includes("application/json")) {
+      // Procesar JSON con base64
+      const jsonData = await request.json();
+
+      if (!jsonData.fileBase64) {
+        return NextResponse.json(
+          createErrorResponse(
+            ErrorCode.FILE_NOT_PROVIDED,
+            getErrorMessage(ErrorCode.FILE_NOT_PROVIDED)
+          ),
+          { status: 400 }
+        );
+      }
+
+      // Decodificar el archivo base64
+      try {
+        const base64Data = jsonData.fileBase64;
+        fileBuffer = Buffer.from(base64Data, "base64");
+
+        // Crear un File a partir del buffer para validaciones
+        file = new File([fileBuffer], "uploaded.xlsx", {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+      } catch {
+        return NextResponse.json(
+          createErrorResponse(
+            ErrorCode.FILE_PARSING_ERROR,
+            "Error al decodificar el archivo base64"
+          ),
+          { status: 400 }
+        );
+      }
+    } else if (contentType.includes("multipart/form-data")) {
+      // Procesar FormData (método original)
+      try {
+        const formData = await request.formData();
+        file = formData.get("file") as File | null;
+
+        if (file) {
+          const arrayBuffer = await file.arrayBuffer();
+          fileBuffer = Buffer.from(arrayBuffer);
+        }
+      } catch {
+        return NextResponse.json(
+          createErrorResponse(
+            ErrorCode.SERVER_ERROR,
+            "Error al procesar el formulario multipart"
+          ),
+          { status: 400 }
+        );
+      }
+    } else {
+      return NextResponse.json(
+        createErrorResponse(
+          ErrorCode.SERVER_ERROR,
+          "Tipo de contenido no soportado. Use 'multipart/form-data' o 'application/json'"
+        ),
+        { status: 400 }
+      );
+    }
+
+    if (!file || !fileBuffer) {
       return NextResponse.json(
         createErrorResponse(
           ErrorCode.FILE_NOT_PROVIDED,
@@ -105,13 +180,9 @@ export async function POST(
       );
     }
 
-    // Convertir el archivo a Buffer para procesarlo con el script Python
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
     try {
-      // Ejecutar el script Python
-      const result = await runPythonScript(buffer);
+      // Ejecutar el script Python con el buffer del archivo
+      const result = await runPythonScript(fileBuffer);
 
       if (result.error) {
         console.error("Error en el script Python:", result.error);
@@ -161,8 +232,31 @@ export async function POST(
         );
       }
 
-      // Verificar que todas las imágenes se generaron correctamente
-      if (!result.matriz_escalera || !result.dendrograma) {
+      // Comprobar si estamos en el nuevo modo (datos de visualización) o modo antiguo (imágenes)
+      if (result.heatmap && result.dendrogram) {
+        // Nuevo modo: devolver los datos para visualización en el cliente
+        return NextResponse.json(
+          createSuccessResponse<ProcessResult>(
+            {
+              heatmap: result.heatmap,
+              dendrogram: result.dendrogram,
+              metadata: result.metadata,
+            },
+            "Archivo procesado correctamente"
+          )
+        );
+      } else if (result.matriz_escalera && result.dendrograma) {
+        // Modo antiguo: devolver las imágenes en base64
+        return NextResponse.json(
+          createSuccessResponse<ProcessResult>(
+            {
+              matriz_escalera: result.matriz_escalera,
+              dendrograma: result.dendrograma,
+            },
+            "Archivo procesado correctamente"
+          )
+        );
+      } else {
         // En modo de prueba, simulamos un resultado exitoso
         if (testMode) {
           console.log("Modo de prueba: Generando respuesta simulada");
@@ -185,17 +279,6 @@ export async function POST(
           { status: 500 }
         );
       }
-
-      // Devolver las imágenes en base64
-      return NextResponse.json(
-        createSuccessResponse<ProcessResult>(
-          {
-            matriz_escalera: result.matriz_escalera,
-            dendrograma: result.dendrograma,
-          },
-          "Archivo procesado correctamente"
-        )
-      );
     } catch (error) {
       console.error("Error al ejecutar el script Python:", error);
 
