@@ -42,9 +42,29 @@ export async function runPythonScript(
       `python ${scriptPath} "${tempFilePath}" "${tempDir}"`
     );
 
-    if (stderr && !stderr.includes("UserWarning")) {
-      console.error("Error desde Python:", stderr);
-      return { error: "Error al ejecutar el script Python." };
+    // Verificamos si hay mensajes de error en la salida
+    if (stderr) {
+      // Separamos los errores de las advertencias (UserWarning son comunes en matplotlib y no son críticos)
+      const isRealError =
+        stderr.includes("ERROR:") ||
+        stderr.includes("ERROR INESPERADO:") ||
+        stderr.includes("ERROR CRÍTICO:") ||
+        (!stderr.includes("UserWarning") && stderr.length > 0);
+
+      if (isRealError) {
+        console.error("Error desde Python:", stderr);
+
+        // Intentar extraer el mensaje de error específico
+        const errorMatch = stderr.match(/ERROR:?\s*(.*)/);
+        const errorMessage = errorMatch
+          ? errorMatch[1]
+          : "Error al ejecutar el script Python.";
+
+        return { error: errorMessage };
+      } else {
+        // Solo son advertencias, podemos continuar
+        console.log("Advertencias desde Python (no críticas):", stderr);
+      }
     }
 
     console.log("Salida de Python:", stdout);
