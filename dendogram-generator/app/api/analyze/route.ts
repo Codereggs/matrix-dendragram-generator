@@ -4,7 +4,7 @@ import path from "path";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid"; // Necesitarás instalar este paquete
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   console.log("Route handler de analyze iniciado");
   try {
     // Leer el cuerpo de la solicitud
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     }
 
     // Ejecutar el script Python
-    return new Promise((resolve) => {
+    return new Promise<Response>((resolve) => {
       const cmd = `python -c "
 import json
 import sys
