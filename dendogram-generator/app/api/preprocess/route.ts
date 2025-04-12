@@ -4,7 +4,7 @@ import path from "path";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid"; // Necesitarás instalar este paquete
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   console.log("Route handler de preprocess iniciado");
   try {
     // Leer el cuerpo de la solicitud
