@@ -5,8 +5,7 @@
     { "src": "package.json", "use": "@vercel/next" }
   ],
   "routes": [
-    { "src": "/api/preprocess", "dest": "/api/preprocess" },
-    { "src": "/api/analyze", "dest": "/api/analyze" },
+    { "src": "/api/generate-charts", "dest": "/api/generate-charts" },
     { "src": "/(.*)", "dest": "/" }
   ]
 }

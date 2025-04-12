@@ -3,8 +3,7 @@
 interface Config {
   apiUrl: string;
   endpoints: {
-    preprocess: string;
-    analyze: string;
+    generateCharts: string;
   };
 }
 
@@ -14,8 +13,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 const config: Config = {
   apiUrl: API_URL,
   endpoints: {
-    preprocess: `${API_URL}/api/preprocess`,
-    analyze: `${API_URL}/api/analyze`,
+    generateCharts: `${API_URL}/api/generate-charts`,
   },
 };
 

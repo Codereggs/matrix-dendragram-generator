@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { z } from "zod";
 import { fileSchema } from "../lib/validations/file-schema";
@@ -17,160 +17,30 @@ interface ProcessingResult {
   success: boolean;
   message: string;
   data?: {
-    heatmap?: {
-      z: number[][];
-      ids: string[];
-    };
-    dendrogram?: {
-      ivl: string[];
-      dcoord: number[][];
-      icoord: number[][];
-      color_list?: string[];
-    };
-    metadata?: {
-      id_url_mapping: Record<string, string>;
-    };
+    dendrograma?: string;
+    matriz_escalera?: string;
   };
 }
 
-// Componente para el heatmap
-const HeatmapCanvas = ({
-  data,
-  width,
-  height,
+// Componente para mostrar imagen en base64
+const Base64Image = ({
+  base64String,
+  alt,
+  className,
 }: {
-  data: number[][];
-  width: number;
-  height: number;
+  base64String: string;
+  alt: string;
+  className?: string;
 }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const cellWidth = width / data.length;
-    const cellHeight = height / data.length;
-
-    // Limpiar el canvas
-    ctx.clearRect(0, 0, width, height);
-
-    // Dibujar cada celda
-    for (let i = 0; i < data.length; i++) {
-      for (let j = 0; j < data[i].length; j++) {
-        const value = data[i][j];
-
-        // Valor entre 0 y 1 para la intensidad del color azul
-        const intensity = value;
-
-        // Color azul con intensidad variable
-        const blue = Math.floor(255 * (1 - intensity));
-        ctx.fillStyle = `rgb(${blue}, ${blue}, 255)`;
-
-        // Dibujar el rectángulo
-        ctx.fillRect(j * cellWidth, i * cellHeight, cellWidth, cellHeight);
-      }
-    }
-
-    // Dibujar bordes
-    ctx.strokeStyle = "#333";
-    ctx.lineWidth = 0.5;
-    ctx.strokeRect(0, 0, width, height);
-  }, [data, width, height]);
+  // Verificar si el string ya incluye el prefijo data:image
+  const src = base64String.startsWith("data:image")
+    ? base64String
+    : `data:image/png;base64,${base64String}`;
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={width}
-      height={height}
-      style={{ width: "100%", height: "auto" }}
-    />
-  );
-};
-
-// Componente para el dendrograma
-const DendrogramCanvas = ({
-  icoord,
-  dcoord,
-  width,
-  height,
-}: {
-  icoord: number[][];
-  dcoord: number[][];
-  width: number;
-  height: number;
-}) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Limpiar el canvas
-    ctx.clearRect(0, 0, width, height);
-
-    // Normalizar coordenadas para que se ajusten al canvas
-    const flatIcoord = icoord.flat();
-    const flatDcoord = dcoord.flat();
-
-    const minX = Math.min(...flatIcoord);
-    const maxX = Math.max(...flatIcoord);
-    const minY = Math.min(...flatDcoord);
-    const maxY = Math.max(...flatDcoord);
-
-    const scaleX = (width - 40) / (maxX - minX);
-    const scaleY = (height - 40) / (maxY - minY);
-
-    // Dibujar líneas
-    ctx.beginPath();
-    ctx.strokeStyle = "#636efa";
-    ctx.lineWidth = 2;
-
-    for (let i = 0; i < icoord.length; i++) {
-      const x1 = (icoord[i][0] - minX) * scaleX + 20;
-      const y1 = height - ((dcoord[i][0] - minY) * scaleY + 20);
-
-      ctx.moveTo(x1, y1);
-
-      for (let j = 1; j < icoord[i].length; j++) {
-        const x = (icoord[i][j] - minX) * scaleX + 20;
-        const y = height - ((dcoord[i][j] - minY) * scaleY + 20);
-        ctx.lineTo(x, y);
-      }
-    }
-
-    ctx.stroke();
-
-    // Dibujar ejes
-    ctx.beginPath();
-    ctx.strokeStyle = "#333";
-    ctx.lineWidth = 1;
-    ctx.moveTo(20, height - 20);
-    ctx.lineTo(width - 20, height - 20);
-    ctx.stroke();
-
-    // Título del eje Y
-    ctx.save();
-    ctx.translate(15, height / 2);
-    ctx.rotate(-Math.PI / 2);
-    ctx.textAlign = "center";
-    ctx.fillText("Distancia", 0, 0);
-    ctx.restore();
-  }, [icoord, dcoord, width, height]);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      width={width}
-      height={height}
-      style={{ width: "100%", height: "auto" }}
-    />
+    <div className={`relative w-full ${className || "h-[500px]"}`}>
+      <img src={src} alt={alt} className="w-full h-full object-contain" />
+    </div>
   );
 };
 
@@ -294,63 +164,29 @@ export default function FileUploader() {
         return;
       }
 
-      // Codificar el archivo a base64
-      const fileBase64 = await readFileAsBase64(file);
+      // Crear un objeto FormData para enviar el archivo directamente
+      const formData = new FormData();
+      formData.append("file", file);
 
-      // Paso 1: Preprocesar el archivo
-      setProgress(40);
-      console.log("Enviando archivo al endpoint de preprocesamiento");
-      const preprocessResponse = await fetch(config.endpoints.preprocess, {
+      // Enviar el archivo al endpoint de generate-charts para generar los gráficos
+      setProgress(50);
+      console.log("Enviando archivo al endpoint para generar los gráficos");
+
+      const response = await fetch(config.endpoints.generateCharts, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ fileBase64 }),
+        body: formData, // Enviamos el FormData con el archivo directamente
       });
 
-      if (!preprocessResponse.ok) {
-        throw new Error(
-          `Error HTTP en preprocesamiento: ${preprocessResponse.status}`
-        );
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`);
       }
 
-      const preprocessData = await preprocessResponse.json();
+      setProgress(90);
+      const data = await response.json();
 
-      if (!preprocessData.success) {
+      if (!data.success) {
         // Manejar respuesta de error
-        const errorResponse = preprocessData as ApiErrorResponse;
-        const errorCode = errorResponse.error.code;
-        const errorMessage = errorResponse.error.message;
-        const errorDetails = errorResponse.error.details;
-
-        setError(errorMessage);
-        setErrorCode(errorCode);
-        setErrorDetails(errorDetails || null);
-
-        showErrorToast(errorCode, errorMessage);
-        throw new Error(errorMessage);
-      }
-
-      // Paso 2: Enviar datos preprocesados al endpoint de análisis
-      setProgress(70);
-      console.log("Enviando datos al endpoint de análisis");
-      const analyzeResponse = await fetch(config.endpoints.analyze, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(preprocessData.data),
-      });
-
-      if (!analyzeResponse.ok) {
-        throw new Error(`Error HTTP en análisis: ${analyzeResponse.status}`);
-      }
-
-      const analyzeData = await analyzeResponse.json();
-
-      if (!analyzeData.success) {
-        // Manejar respuesta de error
-        const errorResponse = analyzeData as ApiErrorResponse;
+        const errorResponse = data as ApiErrorResponse;
         const errorCode = errorResponse.error.code;
         const errorMessage = errorResponse.error.message;
         const errorDetails = errorResponse.error.details;
@@ -366,8 +202,8 @@ export default function FileUploader() {
       setProgress(100);
       setProcessingResult({
         success: true,
-        message: analyzeData.message || "Archivo procesado correctamente.",
-        data: analyzeData.data,
+        message: data.message || "Archivo procesado correctamente.",
+        data: data.data,
       });
       toast.success("¡Archivo procesado con éxito!");
     } catch (err) {
@@ -388,24 +224,6 @@ export default function FileUploader() {
         setTimeout(() => setProgress(0), 3000);
       }
     }
-  };
-
-  // Función para convertir archivo a base64
-  const readFileAsBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === "string") {
-          // Remover el prefijo "data:application/..." de la cadena base64
-          const base64String = reader.result.split(",")[1];
-          resolve(base64String);
-        } else {
-          reject(new Error("No se pudo leer el archivo como string"));
-        }
-      };
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
   };
 
   // Renderizar detalles adicionales del error si existen
@@ -556,86 +374,36 @@ export default function FileUploader() {
                 Resultados del Análisis
               </h2>
 
-              {/* Matriz de Similitud */}
-              {processingResult.data.heatmap && (
-                <div className="bg-white p-4 rounded-lg shadow">
-                  <h3 className="text-lg font-medium mb-3">
-                    Matriz de Similitud (Tipo Escalera)
-                  </h3>
-                  <div className="w-full h-[500px]">
-                    <HeatmapCanvas
-                      data={processingResult.data.heatmap.z}
-                      width={800}
-                      height={500}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Dendrograma */}
-              {processingResult.data.dendrogram && (
+              {/* Mostrar dendrograma como imagen base64 */}
+              {processingResult.data.dendrograma && (
                 <div className="bg-white p-4 rounded-lg shadow">
                   <h3 className="text-lg font-medium mb-3">
                     Dendrograma de Análisis
                   </h3>
-                  <div className="w-full h-[500px]">
-                    <DendrogramCanvas
-                      icoord={processingResult.data.dendrogram.icoord}
-                      dcoord={processingResult.data.dendrogram.dcoord}
-                      width={800}
-                      height={500}
-                    />
-                  </div>
+                  <Base64Image
+                    base64String={processingResult.data.dendrograma}
+                    alt="Dendrograma de Análisis"
+                  />
                 </div>
               )}
 
-              {/* Metadata y enlaces */}
-              {processingResult.data.metadata?.id_url_mapping && (
+              {/* Mostrar matriz de escalera como imagen base64 */}
+              {processingResult.data.matriz_escalera && (
                 <div className="bg-white p-4 rounded-lg shadow">
                   <h3 className="text-lg font-medium mb-3">
-                    URLs de los elementos analizados
+                    Matriz de Similitud (Tipo Escalera)
                   </h3>
-                  <div className="max-h-[300px] overflow-y-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            ID
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            URL
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {Object.entries(
-                          processingResult.data.metadata.id_url_mapping
-                        ).map(([id, url]) => (
-                          <tr key={id}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {id}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-500">
-                              <a
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                {url}
-                              </a>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <Base64Image
+                    base64String={processingResult.data.matriz_escalera}
+                    alt="Matriz de Similitud (Tipo Escalera)"
+                  />
                 </div>
               )}
 
               <div className="text-center">
                 <p className="text-sm text-gray-600 mt-4">
-                  Las visualizaciones son interactivas. Puedes hacer zoom,
-                  desplazarte y descargarlas.
+                  Puedes guardar estas imágenes haciendo clic derecho y
+                  seleccionando &quot;Guardar imagen como...&quot;.
                 </p>
               </div>
             </div>
