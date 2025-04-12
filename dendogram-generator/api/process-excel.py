@@ -9,8 +9,6 @@ import tempfile
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 from scipy.cluster.hierarchy import linkage, dendrogram
-import plotly.express as px
-import plotly.figure_factory as ff
 import gc  # Garbage collector
 
 # Configuración global para reducir uso de memoria

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useDropzone } from "react-dropzone";
 import { z } from "zod";
 import { fileSchema } from "../lib/validations/file-schema";
@@ -11,13 +11,6 @@ import { Alert } from "./ui/alert";
 import { Toaster, toast } from "react-hot-toast";
 import { ErrorCode, getErrorMessage } from "../lib/errors/error-codes";
 import { ApiErrorResponse } from "../lib/errors/api-error";
-import dynamic from "next/dynamic";
-
-// Cargar Plotly dinámicamente para evitar errores de SSR
-const DynamicPlot = dynamic(
-  () => import("react-plotly.js").then((mod) => mod.default),
-  { ssr: false }
-);
 
 interface ProcessingResult {
   success: boolean;
@@ -38,6 +31,147 @@ interface ProcessingResult {
     };
   };
 }
+
+// Componente para el heatmap
+const HeatmapCanvas = ({
+  data,
+  width,
+  height,
+}: {
+  data: number[][];
+  width: number;
+  height: number;
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const cellWidth = width / data.length;
+    const cellHeight = height / data.length;
+
+    // Limpiar el canvas
+    ctx.clearRect(0, 0, width, height);
+
+    // Dibujar cada celda
+    for (let i = 0; i < data.length; i++) {
+      for (let j = 0; j < data[i].length; j++) {
+        const value = data[i][j];
+
+        // Valor entre 0 y 1 para la intensidad del color azul
+        const intensity = value;
+
+        // Color azul con intensidad variable
+        const blue = Math.floor(255 * (1 - intensity));
+        ctx.fillStyle = `rgb(${blue}, ${blue}, 255)`;
+
+        // Dibujar el rectángulo
+        ctx.fillRect(j * cellWidth, i * cellHeight, cellWidth, cellHeight);
+      }
+    }
+
+    // Dibujar bordes
+    ctx.strokeStyle = "#333";
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(0, 0, width, height);
+  }, [data, width, height]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={width}
+      height={height}
+      style={{ width: "100%", height: "auto" }}
+    />
+  );
+};
+
+// Componente para el dendrograma
+const DendrogramCanvas = ({
+  icoord,
+  dcoord,
+  width,
+  height,
+}: {
+  icoord: number[][];
+  dcoord: number[][];
+  width: number;
+  height: number;
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Limpiar el canvas
+    ctx.clearRect(0, 0, width, height);
+
+    // Normalizar coordenadas para que se ajusten al canvas
+    const flatIcoord = icoord.flat();
+    const flatDcoord = dcoord.flat();
+
+    const minX = Math.min(...flatIcoord);
+    const maxX = Math.max(...flatIcoord);
+    const minY = Math.min(...flatDcoord);
+    const maxY = Math.max(...flatDcoord);
+
+    const scaleX = (width - 40) / (maxX - minX);
+    const scaleY = (height - 40) / (maxY - minY);
+
+    // Dibujar líneas
+    ctx.beginPath();
+    ctx.strokeStyle = "#636efa";
+    ctx.lineWidth = 2;
+
+    for (let i = 0; i < icoord.length; i++) {
+      const x1 = (icoord[i][0] - minX) * scaleX + 20;
+      const y1 = height - ((dcoord[i][0] - minY) * scaleY + 20);
+
+      ctx.moveTo(x1, y1);
+
+      for (let j = 1; j < icoord[i].length; j++) {
+        const x = (icoord[i][j] - minX) * scaleX + 20;
+        const y = height - ((dcoord[i][j] - minY) * scaleY + 20);
+        ctx.lineTo(x, y);
+      }
+    }
+
+    ctx.stroke();
+
+    // Dibujar ejes
+    ctx.beginPath();
+    ctx.strokeStyle = "#333";
+    ctx.lineWidth = 1;
+    ctx.moveTo(20, height - 20);
+    ctx.lineTo(width - 20, height - 20);
+    ctx.stroke();
+
+    // Título del eje Y
+    ctx.save();
+    ctx.translate(15, height / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = "center";
+    ctx.fillText("Distancia", 0, 0);
+    ctx.restore();
+  }, [icoord, dcoord, width, height]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={width}
+      height={height}
+      style={{ width: "100%", height: "auto" }}
+    />
+  );
+};
 
 export default function FileUploader() {
   const [file, setFile] = useState<File | null>(null);
@@ -395,24 +529,10 @@ export default function FileUploader() {
                     Matriz de Similitud (Tipo Escalera)
                   </h3>
                   <div className="w-full h-[500px]">
-                    <DynamicPlot
-                      data={[
-                        {
-                          z: processingResult.data.heatmap.z,
-                          type: "heatmap",
-                          colorscale: "Blues",
-                          showscale: true,
-                        },
-                      ]}
-                      layout={{
-                        title: "Matriz de Similitud",
-                        width: 800,
-                        height: 500,
-                        margin: { l: 50, r: 50, b: 50, t: 50 },
-                        xaxis: { showticklabels: false },
-                        yaxis: { showticklabels: false },
-                      }}
-                      config={{ responsive: true }}
+                    <HeatmapCanvas
+                      data={processingResult.data.heatmap.z}
+                      width={800}
+                      height={500}
                     />
                   </div>
                 </div>
@@ -425,26 +545,11 @@ export default function FileUploader() {
                     Dendrograma de Análisis
                   </h3>
                   <div className="w-full h-[500px]">
-                    <DynamicPlot
-                      data={[
-                        {
-                          type: "scatter",
-                          mode: "lines",
-                          x: processingResult.data.dendrogram.icoord.flat(),
-                          y: processingResult.data.dendrogram.dcoord.flat(),
-                          line: { color: "#636efa", width: 2 },
-                        },
-                      ]}
-                      layout={{
-                        title: "Dendrograma",
-                        width: 800,
-                        height: 500,
-                        margin: { l: 50, r: 50, b: 50, t: 50 },
-                        showlegend: false,
-                        xaxis: { showticklabels: false },
-                        yaxis: { title: "Distancia" },
-                      }}
-                      config={{ responsive: true }}
+                    <DendrogramCanvas
+                      icoord={processingResult.data.dendrogram.icoord}
+                      dcoord={processingResult.data.dendrogram.dcoord}
+                      width={800}
+                      height={500}
                     />
                   </div>
                 </div>

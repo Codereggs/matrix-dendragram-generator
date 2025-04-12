@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 
 /**
  * Middleware para agregar cabeceras de seguridad a todas las respuestas
  *
  * @returns Respuesta con cabeceras de seguridad
  */
-export function middleware(_request: NextRequest) {
+export function middleware() {
   // Obtener la respuesta original
   const response = NextResponse.next();
 
@@ -15,7 +14,7 @@ export function middleware(_request: NextRequest) {
   // Content-Security-Policy - Proporciona una capa adicional de seguridad
   response.headers.set(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://va.vercel-analytics.com;"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-analytics.com https://va.vercel-scripts.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://va.vercel-analytics.com https://va.vercel-scripts.com;"
   );
 
   // X-Content-Type-Options - Evita MIME sniffing
