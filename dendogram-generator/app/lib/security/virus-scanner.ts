@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { promisify } from "util";
-// @ts-ignore
+
 import clamav from "clamav.js";
 
 const writeFileAsync = promisify(fs.writeFile);
@@ -11,7 +11,18 @@ const mkdtempAsync = promisify(fs.mkdtemp);
 
 // Crear una declaración de módulo para clamav.js
 declare module "clamav.js" {
-  export function createScanner(options: any): any;
+  export function createScanner(options: {
+    host?: string;
+    port?: number;
+    timeout?: number;
+  }): ClamAvScanner;
+}
+
+interface ClamAvScanner {
+  scan(
+    filePath: string,
+    callback: (err: Error | null, object: unknown, virus: string | null) => void
+  ): void;
 }
 
 /**
@@ -36,7 +47,7 @@ interface VirusScanResult {
  * Clase para escanear archivos en busca de virus
  */
 export class VirusScanner {
-  private scanner: unknown;
+  private scanner: ClamAvScanner;
   private isInitialized: boolean = false;
 
   constructor(options: VirusScannerOptions = {}) {
@@ -96,8 +107,7 @@ export class VirusScanner {
       await writeFileAsync(tempFilePath, buffer);
 
       return new Promise((resolve) => {
-        // Escanear el archivo usando el scanner con tipo any
-        // @ts-ignore
+        // Escanear el archivo usando el scanner
         this.scanner.scan(
           tempFilePath,
           (err: Error | null, _object: unknown, virus: string | null) => {

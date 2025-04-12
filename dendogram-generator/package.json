@@ -34,6 +34,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/clamav.js": "^0.12.4",
     "@types/clamscan": "^2.4.1",
     "@types/node": "^20",
     "@types/react": "^19",
