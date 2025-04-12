@@ -1,9 +1,0 @@
-{
-  "runtime": "python3.9",
-  "functions": {
-    "api/python/process-excel/*.py": {
-      "memory": 4096,
-      "maxDuration": 600
-    }
-  }
-}
