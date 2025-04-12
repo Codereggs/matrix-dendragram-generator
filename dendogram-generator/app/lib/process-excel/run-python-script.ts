@@ -43,7 +43,12 @@ export async function runPythonScript(
         // Convertir el archivo a base64 para enviarlo como JSON
         const fileBase64 = file.toString("base64");
 
-        // Hacer una solicitud al endpoint de Python
+        console.log("Enviando archivo para procesamiento serverless Python...");
+
+        // Hacer una solicitud al endpoint de Python con mayor timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutos de timeout
+
         const response = await fetch("/api/python/process-excel", {
           method: "POST",
           headers: {
@@ -53,22 +58,57 @@ export async function runPythonScript(
             fileBase64,
             filename: "data.xlsx",
           }),
+          signal: controller.signal,
         });
 
+        clearTimeout(timeoutId);
+
+        console.log(
+          "Respuesta del servidor Python:",
+          response.status,
+          response.statusText
+        );
+
         if (!response.ok) {
-          const error = await response.text();
-          return {
-            error: "Error en el procesamiento serverless",
-            details: error,
-          };
+          const errorText = await response.text();
+          try {
+            // Intentar parsear como JSON
+            const errorJson = JSON.parse(errorText);
+            console.error("Error detallado del servidor Python:", errorJson);
+            return {
+              error: errorJson.error || "Error en el procesamiento serverless",
+              details: errorJson.details || errorText,
+            };
+          } catch {
+            // Si no es JSON, usar el texto tal cual
+            console.error("Respuesta de error del servidor Python:", errorText);
+            return {
+              error: "Error en el procesamiento serverless",
+              details: errorText,
+            };
+          }
         }
 
         const result = await response.json();
+        console.log("Procesamiento Python completado");
 
         if (result.error) {
+          console.error(
+            "Error reportado por el servidor Python:",
+            result.error
+          );
           return {
             error: result.error,
             details: result.details || "No hay detalles disponibles",
+          };
+        }
+
+        // Verificar que las imágenes se hayan generado correctamente
+        if (!result.matriz_escalera || !result.dendrograma) {
+          console.error("Faltan imágenes en la respuesta del servidor Python");
+          return {
+            error: "Imágenes faltantes en la respuesta",
+            details: "El servidor no devolvió todas las imágenes requeridas",
           };
         }
 
@@ -78,6 +118,21 @@ export async function runPythonScript(
         };
       } catch (error) {
         console.error("Error al procesar en Vercel:", error);
+        // Detectar si es un error de timeout
+        const isTimeout =
+          error instanceof Error &&
+          (error.name === "AbortError" ||
+            error.message.includes("timeout") ||
+            error.message.includes("aborted"));
+
+        if (isTimeout) {
+          return {
+            error: "El procesamiento tomó demasiado tiempo",
+            details:
+              "El servidor no respondió dentro del tiempo límite. Intente con un archivo más pequeño o contacte al administrador.",
+          };
+        }
+
         return {
           error: "Error al procesar en entorno serverless",
           details: error instanceof Error ? error.message : String(error),
