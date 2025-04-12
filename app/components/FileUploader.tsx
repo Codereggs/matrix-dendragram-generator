@@ -17,8 +17,8 @@ interface ProcessingResult {
   success: boolean;
   message: string;
   data?: {
-    dendrograma?: string;
-    matriz_escalera?: string;
+    dendrogram?: string;
+    similarity_matrix?: string;
   };
 }
 
@@ -375,26 +375,26 @@ export default function FileUploader() {
               </h2>
 
               {/* Mostrar dendrograma como imagen base64 */}
-              {processingResult.data.dendrograma && (
+              {processingResult.data.dendrogram && (
                 <div className="bg-white p-4 rounded-lg shadow">
                   <h3 className="text-lg font-medium mb-3">
                     Dendrograma de Análisis
                   </h3>
                   <Base64Image
-                    base64String={processingResult.data.dendrograma}
+                    base64String={processingResult.data.dendrogram}
                     alt="Dendrograma de Análisis"
                   />
                 </div>
               )}
 
               {/* Mostrar matriz de escalera como imagen base64 */}
-              {processingResult.data.matriz_escalera && (
+              {processingResult.data.similarity_matrix && (
                 <div className="bg-white p-4 rounded-lg shadow">
                   <h3 className="text-lg font-medium mb-3">
                     Matriz de Similitud (Tipo Escalera)
                   </h3>
                   <Base64Image
-                    base64String={processingResult.data.matriz_escalera}
+                    base64String={processingResult.data.similarity_matrix}
                     alt="Matriz de Similitud (Tipo Escalera)"
                   />
                 </div>
