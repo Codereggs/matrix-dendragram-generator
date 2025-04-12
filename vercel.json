@@ -8,6 +8,5 @@
     { "src": "/api/preprocess", "dest": "/api/preprocess" },
     { "src": "/api/analyze", "dest": "/api/analyze" },
     { "src": "/(.*)", "dest": "/" }
-  ],
-  "excludeFiles": "{.next,*.cache,node_modules,public,app}/**"
+  ]
 }

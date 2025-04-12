@@ -11,6 +11,7 @@ import { Alert } from "./ui/alert";
 import { Toaster, toast } from "react-hot-toast";
 import { ErrorCode, getErrorMessage } from "../lib/errors/error-codes";
 import { ApiErrorResponse } from "../lib/errors/api-error";
+import config from "../lib/config";
 
 interface ProcessingResult {
   success: boolean;
@@ -296,9 +297,10 @@ export default function FileUploader() {
       // Codificar el archivo a base64
       const fileBase64 = await readFileAsBase64(file);
 
-      // Enviar al endpoint como JSON
-      setProgress(50);
-      const response = await fetch("/api/process-excel", {
+      // Paso 1: Preprocesar el archivo
+      setProgress(40);
+      console.log("Enviando archivo al endpoint de preprocesamiento");
+      const preprocessResponse = await fetch(config.endpoints.preprocess, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -306,17 +308,49 @@ export default function FileUploader() {
         body: JSON.stringify({ fileBase64 }),
       });
 
-      setProgress(80);
-
-      if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`);
+      if (!preprocessResponse.ok) {
+        throw new Error(
+          `Error HTTP en preprocesamiento: ${preprocessResponse.status}`
+        );
       }
 
-      const data = await response.json();
+      const preprocessData = await preprocessResponse.json();
 
-      if (!data.success) {
+      if (!preprocessData.success) {
         // Manejar respuesta de error
-        const errorResponse = data as ApiErrorResponse;
+        const errorResponse = preprocessData as ApiErrorResponse;
+        const errorCode = errorResponse.error.code;
+        const errorMessage = errorResponse.error.message;
+        const errorDetails = errorResponse.error.details;
+
+        setError(errorMessage);
+        setErrorCode(errorCode);
+        setErrorDetails(errorDetails || null);
+
+        showErrorToast(errorCode, errorMessage);
+        throw new Error(errorMessage);
+      }
+
+      // Paso 2: Enviar datos preprocesados al endpoint de análisis
+      setProgress(70);
+      console.log("Enviando datos al endpoint de análisis");
+      const analyzeResponse = await fetch(config.endpoints.analyze, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(preprocessData.data),
+      });
+
+      if (!analyzeResponse.ok) {
+        throw new Error(`Error HTTP en análisis: ${analyzeResponse.status}`);
+      }
+
+      const analyzeData = await analyzeResponse.json();
+
+      if (!analyzeData.success) {
+        // Manejar respuesta de error
+        const errorResponse = analyzeData as ApiErrorResponse;
         const errorCode = errorResponse.error.code;
         const errorMessage = errorResponse.error.message;
         const errorDetails = errorResponse.error.details;
@@ -332,8 +366,8 @@ export default function FileUploader() {
       setProgress(100);
       setProcessingResult({
         success: true,
-        message: data.message || "Archivo procesado correctamente.",
-        data: data.data,
+        message: analyzeData.message || "Archivo procesado correctamente.",
+        data: analyzeData.data,
       });
       toast.success("¡Archivo procesado con éxito!");
     } catch (err) {

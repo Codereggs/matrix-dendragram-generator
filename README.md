@@ -1,6 +1,97 @@
 # Generador de Dendrogramas y Matrices
 
-Esta aplicación procesa archivos Excel para generar matrices de similitud y dendrogramas utilizando Python en el backend y Next.js en el frontend.
+Este proyecto consta de dos partes:
+
+1. Un frontend desarrollado con Next.js
+2. Un backend desarrollado con Flask
+
+## Estructura del proyecto
+
+```
+/dendogram-generator          # Directorio raíz del proyecto
+├── app/                      # Frontend Next.js
+│   ├── components/           # Componentes de React
+│   ├── lib/                  # Utilidades
+│   └── ...
+├── python-backend/           # Backend de Python con Flask
+│   ├── app/                  # Código de la aplicación Flask
+│   ├── requirements.txt      # Dependencias de Python
+│   └── ...
+└── ...
+```
+
+## Requisitos
+
+- Node.js 18 o superior
+- Python 3.9 o superior
+- npm o yarn
+
+## Instrucciones para desarrollo
+
+### 1. Iniciar el backend de Python
+
+```bash
+# Navegar al directorio del backend
+cd python-backend
+
+# Crear entorno virtual
+python -m venv venv
+
+# Activar entorno virtual
+source venv/bin/activate  # En Windows: venv\Scripts\activate
+
+# Instalar dependencias
+pip install -r requirements.txt
+
+# Iniciar servidor
+python wsgi.py
+```
+
+El backend estará disponible en http://localhost:5000
+
+### 2. Iniciar el frontend Next.js
+
+En otra terminal:
+
+```bash
+# Navegar al directorio raíz
+cd dendogram-generator
+
+# Instalar dependencias
+npm install
+# o
+yarn install
+
+# Iniciar servidor de desarrollo
+npm run dev
+# o
+yarn dev
+```
+
+El frontend estará disponible en http://localhost:3000
+
+## Despliegue
+
+### Backend (Render.com)
+
+1. Crea un nuevo Web Service en Render
+2. Conecta tu repositorio de GitHub
+3. Configura para usar Docker:
+   - Root Directory: `python-backend`
+   - Build Command: (vacío, usa el Dockerfile)
+   - Start Command: (vacío, usa el Dockerfile)
+
+### Frontend (Vercel)
+
+1. Importa desde tu repositorio de GitHub
+2. Configura las variables de entorno:
+   - `NEXT_PUBLIC_API_URL`: URL de tu backend desplegado en Render
+
+## Notas importantes
+
+- Para que el frontend se comunique correctamente con el backend en desarrollo, asegúrate de que ambos estén ejecutándose.
+- El archivo `.env.local` ya está configurado para conectarse al backend a través del proxy de Next.js.
+- Si cambia la URL o puerto del backend, actualiza el archivo `next.config.js` en la sección de `rewrites`.
 
 ## Cómo funciona
 
