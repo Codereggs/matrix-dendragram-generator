@@ -58,11 +58,7 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-
-  // Configuración para procesar archivos de mayor tamaño
-  experimental: {
-    serverComponentsExternalPackages: ["exceljs"],
-  },
+  serverExternalPackages: ["exceljs"],
 
   // Rewrites para dirigir las rutas de API a las funciones Python
   rewrites: async () => {
