@@ -2,7 +2,7 @@
   "framework": "nextjs",
   "functions": {
     "api/process-excel.py": {
-      "runtime": "python3.12",
+      "runtime": "@vercel/python@3.12",
       "memory": 1024,
       "maxDuration": 60
     }
