@@ -12,6 +12,8 @@ Ejemplo:
 
 https://drive.google.com/file/d/1tDOTDomEGyc3jglHOEG5Im__kAiwh9QP/view?usp=sharing
 
+Mientras se suba un archivo similar a este excel, se podrá elaborar la matriz de similitud y el dendrograma con facilidad, evitando tener que pagar herramientas costosas.
+
 ## Detalles técnicos:
 
 Este proyecto consta de dos partes:
