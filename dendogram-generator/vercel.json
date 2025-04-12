@@ -2,9 +2,9 @@
   "framework": "nextjs",
   "functions": {
     "api/process-excel.py": {
-      "runtime": "python3.9",
+      "runtime": "python3.12",
       "memory": 4096,
-      "maxDuration": 600
+      "maxDuration": 60
     }
   },
   "buildCommand": "next build",

@@ -64,12 +64,12 @@ const nextConfig: NextConfig = {
     serverComponentsExternalPackages: ["exceljs"],
   },
 
-  // Configuración para Python serverless
+  // Rewrites para dirigir las rutas de API a las funciones Python
   rewrites: async () => {
     return [
       {
-        source: "/api/python/:path*",
-        destination: "/api/python/:path*",
+        source: "/api/:path*",
+        destination: "/api/:path*",
       },
     ];
   },
