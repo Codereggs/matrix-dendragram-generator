@@ -3,7 +3,7 @@ import json
 import base64
 import io
 import os
-import polars as pl
+import pandas as pd
 import numpy as np
 import tempfile
 from sklearn.metrics.pairwise import cosine_similarity
@@ -49,15 +49,15 @@ class handler(BaseHTTPRequestHandler):
             try:
                 print(f"Procesando archivo Excel: {temp_path}")
                 
-                # Cargar Excel con Polars y openpyxl
-                df = pl.read_excel(
+                # Cargar Excel con pandas y openpyxl
+                df = pd.read_excel(
                     temp_path,
                     sheet_name=0,
-                    read_options={"engine": "openpyxl"},
-                    columns=["id", "url", "description"]
+                    engine="openpyxl",
+                    usecols=["id", "url", "description"]
                 )
                 
-                print(f"Datos cargados: {df.height} filas, {df.width} columnas")
+                print(f"Datos cargados: {df.shape[0]} filas, {df.shape[1]} columnas")
                 
                 # Liberar memoria del archivo temporal
                 if os.path.exists(temp_path):
@@ -77,7 +77,7 @@ class handler(BaseHTTPRequestHandler):
                 print("Procesando matriz de similitud...")
                 
                 # Limitar muestra
-                unique_ids = df.select("id").unique().to_series().to_list()
+                unique_ids = df['id'].unique().tolist()
                 sample_size = min(100, len(unique_ids))
                 if len(unique_ids) > sample_size:
                     print(f"Reduciendo muestra a {sample_size} elementos para optimizar memoria")
@@ -87,15 +87,15 @@ class handler(BaseHTTPRequestHandler):
                 id_url_mapping = {}
                 for item_id in unique_ids:
                     # Filtrar y obtener el primer registro para cada ID
-                    item_data = df.filter(pl.col("id") == item_id)
-                    if item_data.height > 0:
-                        first_row = item_data.row(0)
-                        id_url_mapping[str(first_row[0])] = first_row[1]  # id, url
+                    item_data = df[df['id'] == item_id]
+                    if not item_data.empty:
+                        first_row = item_data.iloc[0]
+                        id_url_mapping[str(first_row['id'])] = first_row['url']
                 
                 # Extraer descripciones - uso más eficiente de memoria
                 descriptions = []
                 for i, item_id in enumerate(unique_ids):
-                    item_descriptions = df.filter(pl.col("id") == item_id).select("description").to_series().to_list()
+                    item_descriptions = df[df['id'] == item_id]['description'].tolist()
                     descriptions.append(' '.join(item_descriptions))
                     # Liberar memoria cada 20 iteraciones
                     if i % 20 == 0:
@@ -167,7 +167,7 @@ class handler(BaseHTTPRequestHandler):
                 # IDs ordenados para el frontend
                 ordered_ids = [str(unique_ids[idx]) for idx in ordered_indices]
                 
-                # Devolver resultado como datos JSON para Plotly
+                # Devolver resultado como datos JSON
                 print("Procesamiento completado con éxito, enviando respuesta...")
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
